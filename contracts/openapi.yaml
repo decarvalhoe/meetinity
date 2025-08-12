@@ -1,0 +1,357 @@
+openapi: 3.0.3
+info:
+  title: Meetinity API
+  description: API pour l'application de networking professionnel Meetinity
+  version: 1.0.0
+  contact:
+    name: Meetinity Team
+
+servers:
+  - url: https://api.meetinity.com
+    description: Production
+  - url: http://localhost:5000
+    description: Development
+
+paths:
+  /auth/login:
+    post:
+      summary: Connexion utilisateur
+      tags: [Authentication]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                email:
+                  type: string
+                  format: email
+                password:
+                  type: string
+              required: [email, password]
+      responses:
+        '200':
+          description: Connexion réussie
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  token:
+                    type: string
+                  user:
+                    $ref: '#/components/schemas/User'
+                  expires_in:
+                    type: integer
+
+  /auth/linkedin:
+    get:
+      summary: Redirection OAuth LinkedIn
+      tags: [Authentication]
+      responses:
+        '302':
+          description: Redirection vers LinkedIn
+
+  /auth/linkedin/callback:
+    get:
+      summary: Callback OAuth LinkedIn
+      tags: [Authentication]
+      parameters:
+        - name: code
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Authentification réussie
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  token:
+                    type: string
+                  user:
+                    $ref: '#/components/schemas/User'
+
+  /profiles:
+    get:
+      summary: Obtenir les profils pour le swipe
+      tags: [Profiles]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 10
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+      responses:
+        '200':
+          description: Liste des profils
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  profiles:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Profile'
+                  total:
+                    type: integer
+
+  /events:
+    get:
+      summary: Obtenir les événements
+      tags: [Events]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: category
+          in: query
+          schema:
+            type: string
+        - name: search
+          in: query
+          schema:
+            type: string
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+      responses:
+        '200':
+          description: Liste des événements
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  events:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Event'
+                  total:
+                    type: integer
+
+  /events/{id}/join:
+    post:
+      summary: S'inscrire à un événement
+      tags: [Events]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Inscription réussie
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  registration_id:
+                    type: integer
+
+  /conversations:
+    get:
+      summary: Obtenir les conversations
+      tags: [Messages]
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Liste des conversations
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  conversations:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Conversation'
+
+  /conversations/{id}/messages:
+    get:
+      summary: Obtenir les messages d'une conversation
+      tags: [Messages]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Messages de la conversation
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  messages:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Message'
+
+    post:
+      summary: Envoyer un message
+      tags: [Messages]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                text:
+                  type: string
+                  maxLength: 1000
+              required: [text]
+      responses:
+        '201':
+          description: Message envoyé
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Message'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    User:
+      type: object
+      properties:
+        id:
+          type: integer
+        email:
+          type: string
+          format: email
+        name:
+          type: string
+        profession:
+          type: string
+        company:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+
+    Profile:
+      type: object
+      properties:
+        user_id:
+          type: integer
+        name:
+          type: string
+        profession:
+          type: string
+        company:
+          type: string
+        bio:
+          type: string
+        skills:
+          type: array
+          items:
+            type: string
+        location:
+          type: string
+        avatar_url:
+          type: string
+
+    Event:
+      type: object
+      properties:
+        id:
+          type: integer
+        title:
+          type: string
+        description:
+          type: string
+        event_date:
+          type: string
+          format: date
+        start_time:
+          type: string
+          format: time
+        location:
+          type: object
+          properties:
+            name:
+              type: string
+            address:
+              type: string
+        category:
+          type: string
+        is_free:
+          type: boolean
+        capacity:
+          type: integer
+
+    Conversation:
+      type: object
+      properties:
+        id:
+          type: integer
+        participant_name:
+          type: string
+        participant_avatar:
+          type: string
+        last_message:
+          type: object
+          properties:
+            text:
+              type: string
+            timestamp:
+              type: string
+              format: date-time
+        unread_count:
+          type: integer
+
+    Message:
+      type: object
+      properties:
+        id:
+          type: integer
+        conversation_id:
+          type: integer
+        sender_id:
+          type: integer
+        sender_name:
+          type: string
+        text:
+          type: string
+        timestamp:
+          type: string
+          format: date-time
