@@ -1,0 +1,56 @@
+environment: dev
+domain: meetinity.com
+
+replicaCount: 2
+
+image:
+  repository: ghcr.io/meetinity/api-gateway
+  tag: "latest"
+  pullPolicy: IfNotPresent
+
+serviceAccount:
+  create: true
+  name: ""
+
+service:
+  type: ClusterIP
+  port: 8080
+
+ingress:
+  enabled: true
+  className: nginx
+  annotations: {}
+  subdomain: api
+  tlsSecretName: api-gateway-tls
+  paths:
+    - path: /
+      pathType: Prefix
+
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 6
+  targetCPUUtilizationPercentage: 70
+  targetMemoryUtilizationPercentage: 80
+
+resources:
+  requests:
+    cpu: 200m
+    memory: 256Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi
+
+env:
+  - name: FLASK_ENV
+    value: production
+  - name: LOG_LEVEL
+    value: info
+
+livenessProbe:
+  path: /healthz
+  port: http
+
+readinessProbe:
+  path: /ready
+  port: http

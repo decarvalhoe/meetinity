@@ -1,0 +1,56 @@
+environment: dev
+domain: meetinity.com
+
+replicaCount: 1
+
+image:
+  repository: ghcr.io/meetinity/matching-service
+  tag: "latest"
+  pullPolicy: IfNotPresent
+
+serviceAccount:
+  create: true
+  name: ""
+
+service:
+  type: ClusterIP
+  port: 5001
+
+ingress:
+  enabled: true
+  className: nginx
+  annotations: {}
+  subdomain: matching
+  tlsSecretName: matching-service-tls
+  paths:
+    - path: /
+      pathType: Prefix
+
+autoscaling:
+  enabled: true
+  minReplicas: 1
+  maxReplicas: 4
+  targetCPUUtilizationPercentage: 60
+  targetMemoryUtilizationPercentage: 70
+
+resources:
+  requests:
+    cpu: 150m
+    memory: 256Mi
+  limits:
+    cpu: 400m
+    memory: 512Mi
+
+env:
+  - name: FLASK_ENV
+    value: production
+  - name: MATCHING_STRATEGY
+    value: interest-based
+
+livenessProbe:
+  path: /healthz
+  port: http
+
+readinessProbe:
+  path: /ready
+  port: http
