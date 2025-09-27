@@ -107,6 +107,18 @@ paths:
                       $ref: '#/components/schemas/Profile'
                   total:
                     type: integer
+        '401':
+          description: Authentification requise ou jeton invalide
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Accès interdit lorsque l'utilisateur n'est pas autorisé à consulter les profils
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
 
   /events:
     get:
@@ -142,6 +154,18 @@ paths:
                       $ref: '#/components/schemas/Event'
                   total:
                     type: integer
+        '401':
+          description: Authentification requise ou jeton invalide
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Accès interdit lorsque l'utilisateur n'a pas les permissions nécessaires pour consulter les événements
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
 
   /events/{id}/join:
     post:
@@ -167,6 +191,24 @@ paths:
                     type: boolean
                   registration_id:
                     type: integer
+        '401':
+          description: Authentification requise ou jeton invalide
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Accès interdit lorsque l'utilisateur n'est pas autorisé à s'inscrire à cet événement
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Événement introuvable lorsque l'identifiant ciblé n'existe pas
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
 
   /conversations:
     get:
@@ -186,6 +228,18 @@ paths:
                     type: array
                     items:
                       $ref: '#/components/schemas/Conversation'
+        '401':
+          description: Authentification requise ou jeton invalide
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Accès interdit lorsque l'utilisateur n'est pas autorisé à consulter les conversations
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
 
   /conversations/{id}/messages:
     get:
@@ -211,6 +265,24 @@ paths:
                     type: array
                     items:
                       $ref: '#/components/schemas/Message'
+        '401':
+          description: Authentification requise ou jeton invalide
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Accès interdit lorsque l'utilisateur n'est pas autorisé à consulter cette conversation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Conversation introuvable lorsque l'identifiant ciblé n'existe pas
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
 
     post:
       summary: Envoyer un message
@@ -241,6 +313,24 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Message'
+        '401':
+          description: Authentification requise ou jeton invalide
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Accès interdit lorsque l'utilisateur n'est pas autorisé à envoyer un message dans cette conversation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Conversation introuvable lorsque l'identifiant ciblé n'existe pas
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
 
 components:
   securitySchemes:
@@ -355,3 +445,21 @@ components:
         timestamp:
           type: string
           format: date-time
+
+    Error:
+      type: object
+      description: Format standardisé pour les réponses d'erreur de l'API
+      properties:
+        code:
+          type: string
+          description: Code d'erreur unique permettant d'identifier la condition rencontrée
+        message:
+          type: string
+          description: Description lisible du problème rencontré
+        details:
+          type: object
+          description: Informations additionnelles pour faciliter le diagnostic
+          additionalProperties: true
+      required:
+        - code
+        - message
