@@ -56,6 +56,7 @@ paths:
   /auth/linkedin/callback:
     get:
       summary: Callback OAuth LinkedIn
+      description: Vérifie côté serveur la correspondance du couple code/state renvoyé par LinkedIn avant d'établir la session utilisateur.
       tags: [Authentication]
       parameters:
         - name: code
@@ -63,6 +64,13 @@ paths:
           required: true
           schema:
             type: string
+        - name: state
+          in: query
+          required: true
+          description: Jeton anti-CSRF généré côté serveur et renvoyé par LinkedIn pour valider la requête.
+          schema:
+            type: string
+            example: 1a2b3c4d5e
       responses:
         '200':
           description: Authentification réussie
@@ -75,27 +83,40 @@ paths:
                     type: string
                   user:
                     $ref: '#/components/schemas/User'
+        '400':
+          description: Paramètre state manquant ou invalide
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
 
   /profiles:
     get:
-      summary: Obtenir les profils pour le swipe
+      summary: Obtenir les profils paginés pour le swipe
+      description: Permet de récupérer une liste paginée de profils à parcourir avec support du décalage et d'une limite configurable.
       tags: [Profiles]
       security:
         - bearerAuth: []
       parameters:
         - name: limit
           in: query
+          description: Nombre maximum de profils à retourner par page.
           schema:
             type: integer
             default: 10
+            minimum: 1
+            maximum: 50
         - name: offset
           in: query
+          description: Décalage de pagination indiquant le nombre de profils à ignorer.
           schema:
             type: integer
             default: 0
+            minimum: 0
+            maximum: 500
       responses:
         '200':
-          description: Liste des profils
+          description: Liste des profils avec métadonnées de pagination
           content:
             application/json:
               schema:
@@ -107,22 +128,16 @@ paths:
                       $ref: '#/components/schemas/Profile'
                   total:
                     type: integer
-        '401':
-          description: Authentification requise ou jeton invalide
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '403':
-          description: Accès interdit lorsque l'utilisateur n'est pas autorisé à consulter les profils
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
+                  has_more:
+                    type: boolean
+                  next_offset:
+                    type: integer
+                required: [profiles, total, has_more]
 
   /events:
     get:
-      summary: Obtenir les événements
+      summary: Obtenir les événements paginés
+      description: Retourne une liste paginée d'événements filtrables par catégorie ou recherche, avec contrôle du nombre d'éléments et du décalage.
       tags: [Events]
       security:
         - bearerAuth: []
@@ -137,12 +152,23 @@ paths:
             type: string
         - name: limit
           in: query
+          description: Nombre maximum d'événements à retourner par page.
           schema:
             type: integer
             default: 20
+            minimum: 1
+            maximum: 100
+        - name: offset
+          in: query
+          description: Décalage de pagination indiquant le nombre d'événements à ignorer.
+          schema:
+            type: integer
+            default: 0
+            minimum: 0
+            maximum: 1000
       responses:
         '200':
-          description: Liste des événements
+          description: Liste des événements avec métadonnées de pagination
           content:
             application/json:
               schema:
@@ -154,18 +180,18 @@ paths:
                       $ref: '#/components/schemas/Event'
                   total:
                     type: integer
-        '401':
-          description: Authentification requise ou jeton invalide
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '403':
-          description: Accès interdit lorsque l'utilisateur n'a pas les permissions nécessaires pour consulter les événements
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
+                  limit:
+                    type: integer
+                    description: Nombre maximal d'événements retournés dans cette page.
+                  offset:
+                    type: integer
+                    description: Décalage utilisé pour produire cette page.
+                  has_more:
+                    type: boolean
+                    description: Indique si d'autres événements sont disponibles après cette page.
+                  next_offset:
+                    type: integer
+                required: [events, total, has_more]
 
   /events/{id}/join:
     post:
@@ -191,24 +217,6 @@ paths:
                     type: boolean
                   registration_id:
                     type: integer
-        '401':
-          description: Authentification requise ou jeton invalide
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '403':
-          description: Accès interdit lorsque l'utilisateur n'est pas autorisé à s'inscrire à cet événement
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '404':
-          description: Événement introuvable lorsque l'identifiant ciblé n'existe pas
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
 
   /conversations:
     get:
@@ -228,18 +236,6 @@ paths:
                     type: array
                     items:
                       $ref: '#/components/schemas/Conversation'
-        '401':
-          description: Authentification requise ou jeton invalide
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '403':
-          description: Accès interdit lorsque l'utilisateur n'est pas autorisé à consulter les conversations
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
 
   /conversations/{id}/messages:
     get:
@@ -265,24 +261,6 @@ paths:
                     type: array
                     items:
                       $ref: '#/components/schemas/Message'
-        '401':
-          description: Authentification requise ou jeton invalide
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '403':
-          description: Accès interdit lorsque l'utilisateur n'est pas autorisé à consulter cette conversation
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '404':
-          description: Conversation introuvable lorsque l'identifiant ciblé n'existe pas
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
 
     post:
       summary: Envoyer un message
@@ -313,24 +291,6 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Message'
-        '401':
-          description: Authentification requise ou jeton invalide
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '403':
-          description: Accès interdit lorsque l'utilisateur n'est pas autorisé à envoyer un message dans cette conversation
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '404':
-          description: Conversation introuvable lorsque l'identifiant ciblé n'existe pas
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
 
 components:
   securitySchemes:
@@ -446,20 +406,15 @@ components:
           type: string
           format: date-time
 
-    Error:
+    ErrorResponse:
       type: object
-      description: Format standardisé pour les réponses d'erreur de l'API
+      required: [error, message]
       properties:
-        code:
+        error:
           type: string
-          description: Code d'erreur unique permettant d'identifier la condition rencontrée
+          description: Code d'erreur machine interprétable.
+          example: INVALID_STATE
         message:
           type: string
-          description: Description lisible du problème rencontré
-        details:
-          type: object
-          description: Informations additionnelles pour faciliter le diagnostic
-          additionalProperties: true
-      required:
-        - code
-        - message
+          description: Description lisible du problème rencontré.
+          example: Le paramètre state est manquant ou invalide.
