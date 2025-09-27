@@ -56,6 +56,7 @@ paths:
   /auth/linkedin/callback:
     get:
       summary: Callback OAuth LinkedIn
+      description: Vérifie côté serveur la correspondance du couple code/state renvoyé par LinkedIn avant d'établir la session utilisateur.
       tags: [Authentication]
       parameters:
         - name: code
@@ -63,6 +64,13 @@ paths:
           required: true
           schema:
             type: string
+        - name: state
+          in: query
+          required: true
+          description: Jeton anti-CSRF généré côté serveur et renvoyé par LinkedIn pour valider la requête.
+          schema:
+            type: string
+            example: 1a2b3c4d5e
       responses:
         '200':
           description: Authentification réussie
@@ -75,27 +83,40 @@ paths:
                     type: string
                   user:
                     $ref: '#/components/schemas/User'
+        '400':
+          description: Paramètre state manquant ou invalide
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
 
   /profiles:
     get:
-      summary: Obtenir les profils pour le swipe
+      summary: Obtenir les profils paginés pour le swipe
+      description: Permet de récupérer une liste paginée de profils à parcourir avec support du décalage et d'une limite configurable.
       tags: [Profiles]
       security:
         - bearerAuth: []
       parameters:
         - name: limit
           in: query
+          description: Nombre maximum de profils à retourner par page.
           schema:
             type: integer
             default: 10
+            minimum: 1
+            maximum: 50
         - name: offset
           in: query
+          description: Décalage de pagination indiquant le nombre de profils à ignorer.
           schema:
             type: integer
             default: 0
+            minimum: 0
+            maximum: 500
       responses:
         '200':
-          description: Liste des profils
+          description: Liste des profils avec métadonnées de pagination
           content:
             application/json:
               schema:
@@ -107,16 +128,16 @@ paths:
                       $ref: '#/components/schemas/Profile'
                   total:
                     type: integer
+                  has_more:
+                    type: boolean
+                  next_offset:
+                    type: integer
+                required: [profiles, total, has_more]
 
   /events:
     get:
-      summary: Obtenir les événements
-      description: >-
-        Retourne une liste paginée d'événements. Utilisez les paramètres `limit` et
-        `offset` pour contrôler la pagination : `limit` définit le nombre maximal
-        d'événements retournés et `offset` spécifie le nombre d'éléments à sauter
-        avant de commencer la récupération. Combinez-les pour itérer sur l'ensemble
-        des résultats.
+      summary: Obtenir les événements paginés
+      description: Retourne une liste paginée d'événements filtrables par catégorie ou recherche, avec contrôle du nombre d'éléments et du décalage.
       tags: [Events]
       security:
         - bearerAuth: []
@@ -131,24 +152,23 @@ paths:
             type: string
         - name: limit
           in: query
+          description: Nombre maximum d'événements à retourner par page.
           schema:
             type: integer
             default: 20
             minimum: 1
             maximum: 100
-          description: Nombre maximal d'événements retournés par page.
         - name: offset
           in: query
+          description: Décalage de pagination indiquant le nombre d'événements à ignorer.
           schema:
             type: integer
             default: 0
             minimum: 0
             maximum: 1000
-          description: >-
-            Index de départ (basé sur zéro) à partir duquel retourner les événements.
       responses:
         '200':
-          description: Liste des événements
+          description: Liste des événements avec métadonnées de pagination
           content:
             application/json:
               schema:
@@ -169,6 +189,9 @@ paths:
                   has_more:
                     type: boolean
                     description: Indique si d'autres événements sont disponibles après cette page.
+                  next_offset:
+                    type: integer
+                required: [events, total, has_more]
 
   /events/{id}/join:
     post:
@@ -382,3 +405,16 @@ components:
         timestamp:
           type: string
           format: date-time
+
+    ErrorResponse:
+      type: object
+      required: [error, message]
+      properties:
+        error:
+          type: string
+          description: Code d'erreur machine interprétable.
+          example: INVALID_STATE
+        message:
+          type: string
+          description: Description lisible du problème rencontré.
+          example: Le paramètre state est manquant ou invalide.
