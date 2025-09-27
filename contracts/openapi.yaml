@@ -111,6 +111,12 @@ paths:
   /events:
     get:
       summary: Obtenir les événements
+      description: >-
+        Retourne une liste paginée d'événements. Utilisez les paramètres `limit` et
+        `offset` pour contrôler la pagination : `limit` définit le nombre maximal
+        d'événements retournés et `offset` spécifie le nombre d'éléments à sauter
+        avant de commencer la récupération. Combinez-les pour itérer sur l'ensemble
+        des résultats.
       tags: [Events]
       security:
         - bearerAuth: []
@@ -128,6 +134,18 @@ paths:
           schema:
             type: integer
             default: 20
+            minimum: 1
+            maximum: 100
+          description: Nombre maximal d'événements retournés par page.
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+            minimum: 0
+            maximum: 1000
+          description: >-
+            Index de départ (basé sur zéro) à partir duquel retourner les événements.
       responses:
         '200':
           description: Liste des événements
@@ -142,6 +160,15 @@ paths:
                       $ref: '#/components/schemas/Event'
                   total:
                     type: integer
+                  limit:
+                    type: integer
+                    description: Nombre maximal d'événements retournés dans cette page.
+                  offset:
+                    type: integer
+                    description: Décalage utilisé pour produire cette page.
+                  has_more:
+                    type: boolean
+                    description: Indique si d'autres événements sont disponibles après cette page.
 
   /events/{id}/join:
     post:
