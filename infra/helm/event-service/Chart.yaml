@@ -1,0 +1,5 @@
+apiVersion: v2
+name: event-service
+description: Deploys the Meetinity Event Service API.
+version: 0.1.0
+appVersion: "1.0.0"

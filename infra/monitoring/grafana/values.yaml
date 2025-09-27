@@ -1,0 +1,55 @@
+adminUser: admin
+adminPassword: changeme
+
+env:
+  GF_SERVER_DOMAIN: grafana.dev.meetinity.com
+  GF_SERVER_ROOT_URL: https://grafana.dev.meetinity.com
+
+service:
+  type: ClusterIP
+  port: 80
+
+ingress:
+  enabled: true
+  ingressClassName: nginx
+  annotations: {}
+  hosts:
+    - grafana.dev.meetinity.com
+  tls:
+    - secretName: grafana-tls
+      hosts:
+        - grafana.dev.meetinity.com
+
+persistence:
+  enabled: true
+  storageClassName: gp2
+  size: 10Gi
+
+dashboardsConfigMaps:
+  default:
+    meetinity-overview: grafana-dashboard-meetinity
+
+sidecar:
+  dashboards:
+    enabled: true
+    label: grafana_dashboard
+  datasources:
+    enabled: true
+
+resources:
+  requests:
+    cpu: 200m
+    memory: 256Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi
+
+datasources:
+  datasources.yaml:
+    apiVersion: 1
+    datasources:
+      - name: Prometheus
+        type: prometheus
+        url: http://monitoring-kube-prometheus-prometheus.monitoring.svc.cluster.local:9090
+        access: proxy
+        isDefault: true

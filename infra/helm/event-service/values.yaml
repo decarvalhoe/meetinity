@@ -1,0 +1,56 @@
+environment: dev
+domain: meetinity.com
+
+replicaCount: 2
+
+image:
+  repository: ghcr.io/meetinity/event-service
+  tag: "latest"
+  pullPolicy: IfNotPresent
+
+serviceAccount:
+  create: true
+  name: ""
+
+service:
+  type: ClusterIP
+  port: 5002
+
+ingress:
+  enabled: true
+  className: nginx
+  annotations: {}
+  subdomain: events
+  tlsSecretName: event-service-tls
+  paths:
+    - path: /
+      pathType: Prefix
+
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 5
+  targetCPUUtilizationPercentage: 65
+  targetMemoryUtilizationPercentage: 75
+
+resources:
+  requests:
+    cpu: 150m
+    memory: 256Mi
+  limits:
+    cpu: 400m
+    memory: 512Mi
+
+env:
+  - name: FLASK_ENV
+    value: production
+  - name: EVENT_CATALOG_URL
+    value: https://catalog.meetinity.internal
+
+livenessProbe:
+  path: /healthz
+  port: http
+
+readinessProbe:
+  path: /ready
+  port: http
