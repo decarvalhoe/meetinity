@@ -92,24 +92,31 @@ paths:
 
   /profiles:
     get:
-      summary: Obtenir les profils pour le swipe
+      summary: Obtenir les profils paginés pour le swipe
+      description: Permet de récupérer une liste paginée de profils à parcourir avec support du décalage et d'une limite configurable.
       tags: [Profiles]
       security:
         - bearerAuth: []
       parameters:
         - name: limit
           in: query
+          description: Nombre maximum de profils à retourner par page.
           schema:
             type: integer
             default: 10
+            minimum: 1
+            maximum: 50
         - name: offset
           in: query
+          description: Décalage de pagination indiquant le nombre de profils à ignorer.
           schema:
             type: integer
             default: 0
+            minimum: 0
+            maximum: 500
       responses:
         '200':
-          description: Liste des profils
+          description: Liste des profils avec métadonnées de pagination
           content:
             application/json:
               schema:
@@ -121,10 +128,16 @@ paths:
                       $ref: '#/components/schemas/Profile'
                   total:
                     type: integer
+                  has_more:
+                    type: boolean
+                  next_offset:
+                    type: integer
+                required: [profiles, total, has_more]
 
   /events:
     get:
-      summary: Obtenir les événements
+      summary: Obtenir les événements paginés
+      description: Retourne une liste paginée d'événements filtrables par catégorie ou recherche, avec contrôle du nombre d'éléments et du décalage.
       tags: [Events]
       security:
         - bearerAuth: []
@@ -139,12 +152,23 @@ paths:
             type: string
         - name: limit
           in: query
+          description: Nombre maximum d'événements à retourner par page.
           schema:
             type: integer
             default: 20
+            minimum: 1
+            maximum: 100
+        - name: offset
+          in: query
+          description: Décalage de pagination indiquant le nombre d'événements à ignorer.
+          schema:
+            type: integer
+            default: 0
+            minimum: 0
+            maximum: 1000
       responses:
         '200':
-          description: Liste des événements
+          description: Liste des événements avec métadonnées de pagination
           content:
             application/json:
               schema:
@@ -156,6 +180,11 @@ paths:
                       $ref: '#/components/schemas/Event'
                   total:
                     type: integer
+                  has_more:
+                    type: boolean
+                  next_offset:
+                    type: integer
+                required: [events, total, has_more]
 
   /events/{id}/join:
     post:
