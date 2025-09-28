@@ -16,83 +16,56 @@ Cette feuille de route détaille les actions nécessaires pour livrer la premiè
   - Tableau d'inventaire à jour.
   - Dockerfiles revus avec validation locale via `docker build` et `docker compose`.
 
-## 2. Créer un registre d'images avec stratégie de tagging et retention
-- **Objectifs** :
-  - Disposer d'un registre central (GHCR, ECR, GCR) sécurisé.
-  - Garantir une politique de tagging cohérente et une purge automatique.
-- **Actions** :
-  1. Valider la plateforme cible (préférence GHCR si GitHub Actions).
-  2. Configurer les permissions d'accès (OIDC GitHub Actions, accès lecture pour runtime, écriture pour CI).
-  3. Définir le schéma de tags : `app:branch-SHORT_SHA`, `app:env-release`, `app:version`.
-  4. Mettre en place la rétention (ex : 30 derniers builds par branche, suppression images orphelines).
-  5. Documenter la procédure de publication et de purge.
-- **Livrables** :
-  - Registre opérationnel + secrets CI/CD configurés.
-  - Politique de tagging et rétention décrite dans la documentation d'infra (`docs/container-registry.md`).
+## 2. Modules Terraform industrialisés
+- **Résumé** : Les modules publiés dans [`infra/terraform/modules`](../infra/terraform/modules) couvrent le provisionnement du cluster Kubernetes, des namespaces, de l'ingress et des dépendances réseau. Le `main.tf` et les environnements d'exemple ([`infra/terraform/kubernetes`](../infra/terraform/kubernetes)) documentent comment composer ces briques avec les variables partagées.
+- **Références** :
+  - Documentation d'usage : [`infra/terraform/README.md`](../infra/terraform/README.md)
+  - Pipelines d'initialisation : [`infra/terraform/main.tf`](../infra/terraform/main.tf)
 
-## 3. Déployer un cluster Kubernetes avec configuration réseau et stockage
-- **Objectifs** :
-  - Obtenir un cluster prêt pour les environnements staging/prod.
-  - Assurer la haute disponibilité réseau et le provisionnement du stockage.
-- **Actions** :
-  1. Choisir le provider (AKS/EKS/GKE/K3s managé) et la région.
-  2. Automatiser le provisioning avec Terraform (`infra/terraform/kubernetes`).
-  3. Configurer le réseau : CNI, ingress controller (NGINX ou Traefik), certificats TLS.
-  4. Configurer le stockage : classes StorageClass (gp2/gp3/ssd), provisioner CSI, snapshots.
-  5. Valider l'accès kubectl via RBAC et groupes IAM.
-- **Livrables** :
-  - Cluster fonctionnel avec accès restreint.
-  - Documentation d'onboarding (`docs/dev-environment.md`).
+> **État :** Livré. Suivi restant : compléter l'inventaire des services (Section 1) pour ajouter les modules manquants identifiés lors de l'audit Dockerfiles.
 
-## 4. Écrire/Maintenir des Helm charts pour chaque service
-- **Objectifs** :
-  - Standardiser les déploiements applicatifs.
-  - Séparer les valeurs par environnement (dev, staging, prod).
-- **Actions** :
-  1. Initialiser un chart parent (common templates, configmap, secrets, probes).
-  2. Créer un chart par service dans `infra/helm` avec templates pour Deployment, Service, HPA, Ingress.
-  3. Définir un dossier `values/` par environnement et intégrer les secrets via Vault/SealedSecrets.
-  4. Ajouter des tests Helm (`helm lint`, `helm template`) dans la CI.
-- **Livrables** :
-  - Charts versionnés avec README.
-  - Pipelines CI validant les templates.
+## 3. Chart Helm umbrella
+- **Résumé** : L'umbrella chart [`infra/helm/meetinity`](../infra/helm/meetinity) assemble les composants mutualisés (ingress, certificats, observabilité) et expose les valeurs communes pour les services applicatifs. Les sous-charts spécifiques résident dans [`infra/helm/meetinity/charts`](../infra/helm/meetinity/charts) avec des valeurs surchargées par environnement (`values/`).
+- **Références** :
+  - Guide de packaging : [`infra/helm/README.md`](../infra/helm/README.md)
+  - Modèle de valeurs : [`infra/helm/meetinity/values.yaml`](../infra/helm/meetinity/values.yaml)
 
-## 5. Mettre en place l'autoscaling (HPA/VPA) et définir les requests/limits
-- **Objectifs** :
-  - Garantir la résilience et l'utilisation optimale des ressources.
-- **Actions** :
-  1. Collecter les métriques applicatives (Prometheus adapter).
-  2. Définir les ressources de base par service (CPU, RAM) via profil de charge.
-  3. Configurer Horizontal Pod Autoscaler (HPA) sur métriques CPU/RAM ou custom.
-  4. Évaluer Vertical Pod Autoscaler (VPA) en mode recommandation pour production.
-  5. Documenter les budgets de PodDisruptionBudget.
-- **Livrables** :
-  - Manifeste HPA/VPA commités.
-  - Table de sizing initiale et procédure de révision.
+> **État :** Livré. Suivi restant : finaliser l'inventaire des services pour embarquer les derniers charts applicatifs manquants.
 
-## 6. Gérer la promotion multi-environnements via namespaces et secrets dédiés
-- **Objectifs** :
-  - Séparer les environnements et tracer les déploiements.
-- **Actions** :
-  1. Créer des namespaces par environnement (`dev`, `staging`, `prod`).
-  2. Définir la nomenclature des releases Helm (`service-env`).
-  3. Provisionner les secrets avec des outils adaptés (SealedSecrets, External Secrets).
-  4. Configurer les règles réseau (NetworkPolicies) et quotas par namespace.
-  5. Mettre en place la promotion automatisée via pipelines (tag + déploiement progressif).
-- **Livrables** :
-  - Namespaces et policies appliqués.
-  - [Guide de promotion documenté](promotion-guide.md).
+## 4. Chaîne CD GitHub Actions → Kubernetes
+- **Résumé** : Le workflow [`.github/workflows/cd.yml`](../.github/workflows/cd.yml) orchestre la construction des images, la publication dans GHCR et le déploiement Helm vers les environnements `staging` et `prod`. Les jobs valident les manifests (`helm lint`, `kubectl diff`) avant promotion et déclenchent des notifications en cas d'échec.
+- **Références** :
+  - Documentation GHCR : [`docs/container-registry.md`](container-registry.md)
+  - README des workflows : [`.github/workflows/README.md`](../.github/workflows/README.md)
+
+> **État :** Livré. Suivi restant : inclure les nouveaux services de l'inventaire dans les matrices de déploiement.
+
+## 5. Playbook d'autoscaling
+- **Résumé** : Le document [`docs/autoscaling-playbook.md`](autoscaling-playbook.md) consolide les paramètres CPU/mémoire recommandés, l'utilisation des HPAs par service et la procédure de revue trimestrielle. Il référence également la configuration Prometheus Adapter gérée dans [`infra/monitoring/prometheus-adapter`](../infra/monitoring/prometheus-adapter) et les alertes associées.
+- **Références** :
+  - Paramètres Grafana : [`infra/monitoring/grafana/values.yaml`](../infra/monitoring/grafana/values.yaml)
+  - Configuration Prometheus : [`infra/monitoring/prometheus/values.yaml`](../infra/monitoring/prometheus/values.yaml)
+
+> **État :** Livré. Suivi restant : intégrer les métriques des services récemment inventoriés pour compléter les courbes de référence.
+
+## 6. Guide de promotion multi-environnements
+- **Résumé** : Le guide opérationnel [`docs/promotion-guide.md`](promotion-guide.md) détaille la gouvernance des namespaces, la gestion des secrets et les garde-fous pour les déploiements progressifs. Il décrit également la procédure de rollback et la validation qualité avant passage en production.
+- **Références** :
+  - Politique de sécurité : [`infra/security/README.md`](../infra/security/README.md)
+  - Script de déploiement : [`infra/scripts/deploy.sh`](../infra/scripts/deploy.sh)
+
+> **État :** Livré. Suivi restant : attendre l'issue de l'audit Dockerfiles/Inventaire pour intégrer les derniers flux de promotion.
 
 ---
 
 ## Calendrier indicatif
 | Sprint | Livrable principal | Notes |
 |--------|--------------------|-------|
-| S1     | Inventaire des services + Dockerfiles prioritaires | Implique toutes les squads applicatives |
-| S2     | Registre d'images + pipeline de build initial | Dépend de S1 |
-| S3     | Cluster Kubernetes prêt + chart commun | Collaboration avec l'équipe plateforme |
-| S4     | Charts par service + déploiements dev/staging | Tests intégrés dans la CI |
-| S5     | Autoscaling + promotion multi-env | Ajustements basés sur les métriques |
+| S1     | Inventaire des services + Dockerfiles prioritaires | ⏳ Reste à finaliser : consolidation de l'audit et revue des Dockerfiles |
+| S2     | Registre d'images + pipeline de build initial | ✅ Livré – dépendait de S1 mais la dette est isolée à l'inventaire |
+| S3     | Cluster Kubernetes prêt + chart commun | ✅ Livré et aligné avec les modules Terraform |
+| S4     | Charts par service + déploiements dev/staging | ✅ Livré via l'umbrella chart et la chaîne CD |
+| S5     | Autoscaling + promotion multi-env | ✅ Livré – reste uniquement les ajustements liés aux nouveaux services |
 
 ## Gouvernance
 - **Owner** : Équipe Platform/DevOps.
