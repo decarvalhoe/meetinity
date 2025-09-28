@@ -29,6 +29,18 @@ variable "node_group_config" {
   })
 }
 
+variable "cluster_admin_role_name" {
+  description = "Name of the IAM role granting administrative access to the cluster."
+  type        = string
+  default     = "meetinity-eks-admin"
+}
+
+variable "cluster_admin_principal_arns" {
+  description = "Additional IAM principal ARNs allowed to assume the admin role."
+  type        = list(string)
+  default     = []
+}
+
 variable "tags" {
   description = "Resource tags."
   type        = map(string)

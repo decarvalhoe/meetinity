@@ -17,3 +17,18 @@ output "node_group_role_arn" {
   description = "IAM role ARN for the default node group."
   value       = module.eks.eks_managed_node_groups["default"].iam_role_arn
 }
+
+output "cluster_admin_role_arn" {
+  description = "IAM role ARN that maps to Kubernetes cluster-admin permissions."
+  value       = aws_iam_role.cluster_admin.arn
+}
+
+output "ebs_csi_role_arn" {
+  description = "IAM role ARN associated with the EBS CSI driver service account."
+  value       = aws_iam_role.ebs_csi.arn
+}
+
+output "ebs_csi_addon_id" {
+  description = "Identifier of the aws-ebs-csi-driver managed add-on."
+  value       = aws_eks_addon.ebs_csi.id
+}

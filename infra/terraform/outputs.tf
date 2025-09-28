@@ -27,3 +27,13 @@ output "node_group_role_arn" {
   description = "IAM role ARN used by the primary node group."
   value       = module.eks.node_group_role_arn
 }
+
+output "cluster_admin_role_arn" {
+  description = "IAM role ARN that administrators must assume for kubectl access."
+  value       = module.eks.cluster_admin_role_arn
+}
+
+output "ebs_csi_role_arn" {
+  description = "IAM role ARN associated with the EBS CSI controller service account."
+  value       = module.eks.ebs_csi_role_arn
+}
