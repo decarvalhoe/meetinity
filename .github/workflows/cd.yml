@@ -13,22 +13,33 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: api-gateway
   CHART_PATH: infra/helm/meetinity
   VALUES_PATH: infra/helm/meetinity/values
   K8S_ENV_PATH: infra/kubernetes/environments
+  SERVICES: api-gateway user-service matching-service event-service
 
 jobs:
   build:
-    name: Build & publish container image
+    name: Build & publish ${{ matrix.service.name }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
+    strategy:
+      matrix:
+        service:
+          - name: api-gateway
+            context: services/api-gateway
+          - name: user-service
+            context: services/user-service
+          - name: matching-service
+            context: services/matching-service
+          - name: event-service
+            context: services/event-service
     outputs:
-      image_uri: ${{ steps.meta.outputs.image_uri }}
       release_version: ${{ steps.meta.outputs.release_version }}
       short_sha: ${{ steps.meta.outputs.short_sha }}
+      owner: ${{ steps.meta.outputs.owner }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -51,11 +62,10 @@ jobs:
 
           short_sha="${GITHUB_SHA::7}"
           owner="${GITHUB_REPOSITORY_OWNER,,}"
-          image_uri="${{ env.REGISTRY }}/$owner/${{ env.IMAGE_NAME }}"
 
-          echo "image_uri=$image_uri" >> "$GITHUB_OUTPUT"
           echo "release_version=$version" >> "$GITHUB_OUTPUT"
           echo "short_sha=$short_sha" >> "$GITHUB_OUTPUT"
+          echo "owner=$owner" >> "$GITHUB_OUTPUT"
 
       - name: Log in to GitHub Container Registry
         uses: docker/login-action@v3
@@ -66,16 +76,20 @@ jobs:
 
       - name: Build Docker image
         run: |
+          owner="${{ steps.meta.outputs.owner }}"
+          image_uri="${{ env.REGISTRY }}/$owner/${{ matrix.service.name }}"
           docker build \
             --build-arg GIT_SHA=${GITHUB_SHA} \
-            --tag ${{ steps.meta.outputs.image_uri }}:${{ steps.meta.outputs.release_version }} \
-            --tag ${{ steps.meta.outputs.image_uri }}:sha-${{ steps.meta.outputs.short_sha }} \
-            .
+            --tag "$image_uri:${{ steps.meta.outputs.release_version }}" \
+            --tag "$image_uri:sha-${{ steps.meta.outputs.short_sha }}" \
+            "${{ matrix.service.context }}"
 
       - name: Push Docker image
         run: |
-          docker push ${{ steps.meta.outputs.image_uri }}:${{ steps.meta.outputs.release_version }}
-          docker push ${{ steps.meta.outputs.image_uri }}:sha-${{ steps.meta.outputs.short_sha }}
+          owner="${{ steps.meta.outputs.owner }}"
+          image_uri="${{ env.REGISTRY }}/$owner/${{ matrix.service.name }}"
+          docker push "$image_uri:${{ steps.meta.outputs.release_version }}"
+          docker push "$image_uri:sha-${{ steps.meta.outputs.short_sha }}"
 
   deploy-dev:
     name: Deploy to dev
@@ -126,18 +140,25 @@ jobs:
 
       - name: Deploy chart
         run: |
+          owner="${{ needs.build.outputs.owner }}"
+          version="${{ needs.build.outputs.release_version }}"
+          extra_args=()
+          for svc in $SERVICES; do
+            extra_args+=(--set-string "${svc}.image.repository=${{ env.REGISTRY }}/$owner/${svc}")
+            extra_args+=(--set-string "${svc}.image.tag=${version}")
+          done
+
           helm upgrade --install "${RELEASE_NAME}" "${{ env.CHART_PATH }}" \
             --namespace "${NAMESPACE}" \
             --values "${{ env.CHART_PATH }}/values.yaml" \
             --values "${VALUES_FILE}" \
             --set-string global.environment="${ENVIRONMENT_KEY}" \
-            --set-string api-gateway.image.repository=${{ needs.build.outputs.image_uri }} \
-            --set-string api-gateway.image.tag=${{ needs.build.outputs.release_version }} \
+            "${extra_args[@]}" \
             --wait
 
       - name: Wait for workloads
         run: |
-          for svc in api-gateway user-service matching-service event-service; do
+          for svc in $SERVICES; do
             kubectl rollout status deployment/"${svc}-${ENVIRONMENT_KEY}" \
               --namespace "${NAMESPACE}" \
               --timeout=5m
@@ -194,18 +215,25 @@ jobs:
 
       - name: Deploy chart
         run: |
+          owner="${{ needs.build.outputs.owner }}"
+          version="${{ needs.build.outputs.release_version }}"
+          extra_args=()
+          for svc in $SERVICES; do
+            extra_args+=(--set-string "${svc}.image.repository=${{ env.REGISTRY }}/$owner/${svc}")
+            extra_args+=(--set-string "${svc}.image.tag=${version}")
+          done
+
           helm upgrade --install "${RELEASE_NAME}" "${{ env.CHART_PATH }}" \
             --namespace "${NAMESPACE}" \
             --values "${{ env.CHART_PATH }}/values.yaml" \
             --values "${VALUES_FILE}" \
             --set-string global.environment="${ENVIRONMENT_KEY}" \
-            --set-string api-gateway.image.repository=${{ needs.build.outputs.image_uri }} \
-            --set-string api-gateway.image.tag=${{ needs.build.outputs.release_version }} \
+            "${extra_args[@]}" \
             --wait
 
       - name: Wait for workloads
         run: |
-          for svc in api-gateway user-service matching-service event-service; do
+          for svc in $SERVICES; do
             kubectl rollout status deployment/"${svc}-${ENVIRONMENT_KEY}" \
               --namespace "${NAMESPACE}" \
               --timeout=5m
@@ -262,18 +290,25 @@ jobs:
 
       - name: Deploy chart
         run: |
+          owner="${{ needs.build.outputs.owner }}"
+          version="${{ needs.build.outputs.release_version }}"
+          extra_args=()
+          for svc in $SERVICES; do
+            extra_args+=(--set-string "${svc}.image.repository=${{ env.REGISTRY }}/$owner/${svc}")
+            extra_args+=(--set-string "${svc}.image.tag=${version}")
+          done
+
           helm upgrade --install "${RELEASE_NAME}" "${{ env.CHART_PATH }}" \
             --namespace "${NAMESPACE}" \
             --values "${{ env.CHART_PATH }}/values.yaml" \
             --values "${VALUES_FILE}" \
             --set-string global.environment="${ENVIRONMENT_KEY}" \
-            --set-string api-gateway.image.repository=${{ needs.build.outputs.image_uri }} \
-            --set-string api-gateway.image.tag=${{ needs.build.outputs.release_version }} \
+            "${extra_args[@]}" \
             --wait
 
       - name: Wait for workloads
         run: |
-          for svc in api-gateway user-service matching-service event-service; do
+          for svc in $SERVICES; do
             kubectl rollout status deployment/"${svc}-${ENVIRONMENT_KEY}" \
               --namespace "${NAMESPACE}" \
               --timeout=5m

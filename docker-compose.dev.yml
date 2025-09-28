@@ -76,7 +76,7 @@ services:
 
   api-gateway:
     build:
-      context: ../meetinity-api-gateway
+      context: ./services/api-gateway
       dockerfile: Dockerfile
     container_name: meetinity-api-gateway
     restart: unless-stopped
@@ -90,13 +90,13 @@ services:
     ports:
       - "${API_GATEWAY_PORT:-8080}:8080"
     volumes:
-      - ../meetinity-api-gateway:/app
+      - ./services/api-gateway:/app
     networks:
       - meetinity-net
 
   user-service:
     build:
-      context: ../meetinity-user-service
+      context: ./services/user-service
       dockerfile: Dockerfile
     container_name: meetinity-user-service
     restart: unless-stopped
@@ -110,13 +110,13 @@ services:
     ports:
       - "${USER_SERVICE_PORT:-8081}:8080"
     volumes:
-      - ../meetinity-user-service:/app
+      - ./services/user-service:/app
     networks:
       - meetinity-net
 
   matching-service:
     build:
-      context: ../meetinity-matching-service
+      context: ./services/matching-service
       dockerfile: Dockerfile
     container_name: meetinity-matching-service
     restart: unless-stopped
@@ -130,13 +130,13 @@ services:
     ports:
       - "${MATCHING_SERVICE_PORT:-8082}:8080"
     volumes:
-      - ../meetinity-matching-service:/app
+      - ./services/matching-service:/app
     networks:
       - meetinity-net
 
   event-service:
     build:
-      context: ../meetinity-event-service
+      context: ./services/event-service
       dockerfile: Dockerfile
     container_name: meetinity-event-service
     restart: unless-stopped
@@ -150,7 +150,7 @@ services:
     ports:
       - "${EVENT_SERVICE_PORT:-8083}:8080"
     volumes:
-      - ../meetinity-event-service:/app
+      - ./services/event-service:/app
     networks:
       - meetinity-net
 
