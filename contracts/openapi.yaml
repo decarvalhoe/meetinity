@@ -93,7 +93,7 @@ paths:
   /profiles:
     get:
       summary: Obtenir les profils paginés pour le swipe
-      description: Permet de récupérer une liste paginée de profils à parcourir avec support du décalage et d'une limite configurable.
+      description: Permet de récupérer une liste paginée de profils à parcourir avec support du décalage et d'une limite configurable. Retourne une erreur 401 si le jeton d'authentification est absent ou invalide et 403 si le compte de l'utilisateur est suspendu ou n'a pas encore complété son profil.
       tags: [Profiles]
       security:
         - bearerAuth: []
@@ -133,11 +133,23 @@ paths:
                   next_offset:
                     type: integer
                 required: [profiles, total, has_more]
+        '401':
+          description: Jeton d'authentification manquant ou invalide.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Accès refusé car le compte est suspendu ou incomplet.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
 
   /events:
     get:
       summary: Obtenir les événements paginés
-      description: Retourne une liste paginée d'événements filtrables par catégorie ou recherche, avec contrôle du nombre d'éléments et du décalage.
+      description: Retourne une liste paginée d'événements filtrables par catégorie ou recherche, avec contrôle du nombre d'éléments et du décalage. Peut retourner une erreur 401 si la session est invalide et 403 si l'utilisateur n'a pas accès à la liste des événements.
       tags: [Events]
       security:
         - bearerAuth: []
@@ -192,10 +204,23 @@ paths:
                   next_offset:
                     type: integer
                 required: [events, total, has_more]
+        '401':
+          description: Jeton d'accès expiré ou non fourni.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Accès aux événements refusé par la politique de l'organisation.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
 
   /events/{id}/join:
     post:
       summary: S'inscrire à un événement
+      description: Enregistre l'utilisateur connecté à l'événement ciblé. Retourne 401 si l'authentification échoue, 403 si les inscriptions sont fermées pour l'utilisateur et 404 si l'événement est introuvable.
       tags: [Events]
       security:
         - bearerAuth: []
@@ -217,10 +242,29 @@ paths:
                     type: boolean
                   registration_id:
                     type: integer
+        '401':
+          description: Jeton d'authentification manquant ou invalide.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Accès refusé car l'utilisateur ne peut pas s'inscrire à cet événement.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Aucun événement correspondant à l'identifiant fourni n'a été trouvé.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
 
   /conversations:
     get:
       summary: Obtenir les conversations
+      description: Retourne la liste des conversations disponibles pour l'utilisateur connecté. Produit une erreur 401 lorsque la session est invalide et 403 si l'utilisateur n'a pas encore été autorisé à accéder à la messagerie.
       tags: [Messages]
       security:
         - bearerAuth: []
@@ -236,10 +280,23 @@ paths:
                     type: array
                     items:
                       $ref: '#/components/schemas/Conversation'
+        '401':
+          description: Jeton d'authentification manquant ou expiré.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Accès refusé car la messagerie n'est pas disponible pour ce compte.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
 
   /conversations/{id}/messages:
     get:
       summary: Obtenir les messages d'une conversation
+      description: Récupère les messages d'une conversation spécifique. Retourne 401 si la session n'est pas valide, 403 si l'utilisateur n'est pas membre de la conversation et 404 si la conversation est introuvable.
       tags: [Messages]
       security:
         - bearerAuth: []
@@ -261,9 +318,28 @@ paths:
                     type: array
                     items:
                       $ref: '#/components/schemas/Message'
+        '401':
+          description: Jeton d'accès invalide ou absent.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Accès refusé car l'utilisateur n'est pas autorisé à consulter cette conversation.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Conversation introuvable pour l'identifiant fourni.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
 
     post:
       summary: Envoyer un message
+      description: Envoie un nouveau message dans la conversation indiquée. Retourne 401 si l'utilisateur n'est pas authentifié, 403 lorsqu'il n'appartient pas à la conversation et 404 si la conversation n'existe pas.
       tags: [Messages]
       security:
         - bearerAuth: []
@@ -291,6 +367,24 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Message'
+        '401':
+          description: Jeton d'authentification manquant ou invalide.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Accès refusé car l'utilisateur n'est pas autorisé à écrire dans cette conversation.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Conversation introuvable pour l'identifiant fourni.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
 
 components:
   securitySchemes:
