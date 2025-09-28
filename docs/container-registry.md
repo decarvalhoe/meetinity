@@ -26,31 +26,34 @@ Runtime clusters reference the reader token via the Kubernetes pull secret `ghcr
 
 ## Tagging scheme
 
-Every build publishes three immutable tags so that stakeholders can pull images by deployment, environment, or semantic version:
+Releases that flow through [`.github/workflows/cd.yml`](../.github/workflows/cd.yml) publish **two** tags for each container version:
 
-- `app:branch-SHORT_SHA` – immutable build tag, derived from the branch name (sanitized to kebab-case) and the 7-character commit SHA.
-- `app:env-release` – mutable release pointer updated on every deployment to a given environment (defaults to `production` but can be overridden with the `RELEASE_ENVIRONMENT` secret).
-- `app:version` – semantic version sourced from `infra/helm/api-gateway/Chart.yaml` (`appVersion` fallback to `version`).
+- `vX.Y.Z` – semantic-release tag derived from the `release/v*` Git reference that triggered the workflow.
+- `sha-<SHORT_SHA>` – immutable build tag that captures the 7-character commit SHA associated with the release.
 
-The CD workflow enforces this scheme by failing the pipeline when the version cannot be inferred and by pushing the three tags on every deployment.
+The workflow fails fast if it cannot infer the semantic version and always pushes both tags to keep the build reproducible and auditable.
+
+### Release promotion
+
+Releases are promoted by creating (or dispatching) tags that match `release/v*`:
+
+1. The `release/v*` ref is converted to the semantic version (`vX.Y.Z`) used for tagging the image.
+2. The build job publishes the versioned and SHA tags to `ghcr.io/<org>/api-gateway`.
+3. Subsequent jobs deploy the umbrella chart at `infra/helm/meetinity` into the `meetinity-dev`, `meetinity-staging`, and `meetinity-prod` namespaces in order, ensuring the same release version rolls through each environment.
 
 ## Publication workflow
 
 1. GitHub Actions builds the Docker image and logs in to GHCR using the repository's `GITHUB_TOKEN` (packages: write).
-2. The workflow tags the image using the scheme above and pushes all tags to `ghcr.io/<org>/api-gateway`.
+2. The workflow tags the image using the scheme above and pushes both tags to `ghcr.io/<org>/api-gateway`.
 3. The Kubernetes pull secret is (re)created with the organization-wide runtime credentials so that workload pods keep access to GHCR.
-4. Helm is upgraded with the immutable branch/SHA tag, guaranteeing reproducible rollouts.
-
-### Release environment override
-
-Set the organization secret `RELEASE_ENVIRONMENT` (for example `staging`, `production`) when you need the `env-release` tag to target a specific namespace. The CD workflow lowercases and sanitizes the value to make it registry-safe.
+4. Helm upgrades the umbrella chart (`infra/helm/meetinity`) with the semantic version tag, guaranteeing reproducible rollouts across namespaces.
 
 ## Retention and purge
 
 Automated retention is handled by the scheduled workflow `.github/workflows/ghcr-retention.yml`:
 
-- Keeps the last **30** branch build images that only contain `branch-shortSHA` tags.
-- Preserves images that also carry release or semantic version tags.
+- Keeps the last **30** build images that only contain `sha-<SHORT_SHA>` tags (no semantic version).
+- Preserves images that also carry semantic-release tags (`vX.Y.Z`).
 - Removes orphaned container versions (no tags).
 - Uses the optional `GHCR_RETENTION_TOKEN` secret when available to satisfy the `delete:packages` scope.
 
@@ -58,7 +61,7 @@ Manual purge procedure:
 
 1. Trigger the "GHCR Retention" workflow manually (`workflow_dispatch`) and confirm that the job deletes the intended versions.
 2. For emergency purges, run the workflow with `GHCR_RETENTION_TOKEN` present so deletions succeed even if branch builds are protected by org policies.
-3. Validate that the latest `env-release` and semantic version tags still exist by listing package tags in the GitHub UI or via `crane ls ghcr.io/<org>/api-gateway`.
+3. Validate that the latest semantic version and SHA tags still exist by listing package tags in the GitHub UI or via `crane ls ghcr.io/<org>/api-gateway`.
 4. If additional cleanup is needed (e.g., deprecating a semantic version), delete the tag in the GitHub UI which will detach it from its container version; the retention workflow will pick up the orphaned version on the next run.
 
 Document owners should update this guide whenever the Helm chart path, registry namespace, or tagging strategy changes.
