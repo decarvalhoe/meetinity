@@ -14,20 +14,24 @@ Each job uses the `actions/setup-node` cache integration so that Node.js depende
 
 ## Continuous Delivery (`cd.yml`)
 
-The CD workflow is triggered on pushes to the `main` branch. It builds and tags a Docker image, pushes it to GitHub Container Registry (GHCR), and then deploys the Helm chart located at `infra/helm/api-gateway` to the target EKS cluster.
+The CD workflow promotes tagged releases through each Kubernetes environment. It triggers automatically for tags that match `release/v*` and can also be invoked manually via **Run workflow**. When dispatched manually you must provide the `version` input (for example `v1.2.3`), which is used for both the container tag and the Helm release metadata.
 
-The workflow expects the following secrets/variables to be defined in the repository (or organization) settings:
+Container images are built from the repository root and published to GitHub Container Registry (GHCR). Helm deploys the umbrella chart at `infra/helm/meetinity` while layering per-environment overrides from `infra/helm/meetinity/values/<environment>.yaml`. Namespace policies, quotas, and other baseline resources live under `infra/kubernetes/environments/<environment>/namespace.yaml`; the workflow applies these manifests before running Helm so operators should update them when adjusting limits or admission controls.
+
+Deployments run sequentially—`dev` → `staging` → `prod`—so a failure in an earlier environment blocks promotion to the next stage.
+
+### Required secrets and variables
 
 | Name | Type | Description |
 |------|------|-------------|
-| `AWS_ACCESS_KEY_ID` | Secret | IAM access key with permissions for ECR (push) and EKS (update kubeconfig / deploy). |
+| `AWS_ACCESS_KEY_ID` | Secret | IAM user or role credentials with permissions for building/pushing images and interacting with the target EKS cluster. |
 | `AWS_SECRET_ACCESS_KEY` | Secret | Secret access key paired with `AWS_ACCESS_KEY_ID`. |
-| `AWS_REGION` | Variable or Secret | AWS region for both ECR and EKS resources (for example, `eu-west-1`). |
-| `EKS_CLUSTER_NAME` | Secret or Variable | Name of the Amazon EKS cluster targeted by the deployment. |
-| `K8S_NAMESPACE` | Secret or Variable | Kubernetes namespace where the chart should be installed/updated. |
-| `GHCR_READER_USERNAME` | Secret | Username for the organization-wide GHCR read token used by Kubernetes. |
-| `GHCR_READER_TOKEN` | Secret | Token with `read:packages` scope for GHCR pull access from the cluster. |
-| `RELEASE_ENVIRONMENT` | Secret (optional) | Environment label that drives the `env-release` tag (defaults to `production`). |
+| `AWS_REGION` | Variable or Secret | AWS region hosting the EKS cluster (for example, `eu-west-1`). |
+| `EKS_CLUSTER_NAME` | Secret or Variable | Name of the Amazon EKS cluster targeted by the deployments. |
+| `GHCR_READER_USERNAME` | Secret | Service account username for the GHCR pull secret created inside each namespace. |
+| `GHCR_READER_TOKEN` | Secret | Token with `read:packages` scope used by the cluster to pull images from GHCR. |
+
+The workflow also expects the environment manifests referenced at `infra/kubernetes/environments/<environment>/namespace.yaml` (dev, staging, prod) to exist so that namespace configuration can be applied as part of each deployment.
 
 ### Optional configuration
 
@@ -35,7 +39,7 @@ The workflow expects the following secrets/variables to be defined in the reposi
 |------|------|-------------|
 | `GHCR_RETENTION_TOKEN` | Secret | Fine-scoped PAT with `read:packages`, `write:packages`, and `delete:packages` used by the retention workflow when deletions require elevated privileges. |
 
-If your project uses a custom Dockerfile path, Helm release name, or chart path, update the environment variables defined at the top of `cd.yml` (defaults: `IMAGE_NAME=api-gateway`, `CHART_PATH=infra/helm/api-gateway`).
+If your project uses a custom Dockerfile path, release name, or chart path, update the environment variables defined at the top of `cd.yml` (defaults: `IMAGE_NAME=api-gateway`, `CHART_PATH=infra/helm/meetinity`, `VALUES_PATH=infra/helm/meetinity/values`).
 
 For production environments, prefer using short-lived credentials with GitHub's OpenID Connect (OIDC) integration and an assumable IAM role instead of long-lived access keys.
 
