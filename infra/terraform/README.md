@@ -5,8 +5,9 @@ This Terraform configuration bootstraps the AWS infrastructure required to run t
 ## Components
 
 - **VPC module** – Creates a multi-AZ VPC with public and private subnets, routing tables, and optional NAT gateways.
-- **EKS module** – Provisions an EKS control plane and managed node group spanning the private subnets.
-- **Kubernetes namespaces** – Pre-creates logical namespaces for monitoring and security add-ons deployed with Helm.
+- **EKS module** – Provisions an EKS control plane, managed node group, core add-ons (VPC CNI, CoreDNS, kube-proxy, EBS CSI), and IAM roles for administrators and CSI drivers.
+- **Helm releases** – Installs cert-manager (with a default self-signed issuer) and the NGINX ingress controller, wiring a default TLS certificate for new ingresses.
+- **Kubernetes namespaces & storage classes** – Pre-creates logical namespaces for monitoring/security, the ingress and cert-manager system namespaces, and a default gp3 storage class backed by the AWS EBS CSI driver.
 
 ## Usage
 
@@ -22,7 +23,7 @@ This Terraform configuration bootstraps the AWS infrastructure required to run t
    ```hcl
    environment          = "dev"
    cluster_name         = "meetinity-dev"
-   aws_region           = "eu-west-3"
+   aws_region           = "eu-west-1"
    node_group_config = {
      desired_size   = 2
      max_size       = 4
@@ -42,10 +43,10 @@ This Terraform configuration bootstraps the AWS infrastructure required to run t
 5. Once applied, configure `kubectl`:
 
    ```bash
-   aws eks update-kubeconfig --region eu-west-3 --name $(terraform output -raw cluster_name)
+   aws eks update-kubeconfig --region eu-west-1 --name $(terraform output -raw cluster_name)
    ```
 
-   The sensitive `cluster_auth` output also contains the endpoint and CA bundle required by automation tools.
+   The sensitive `cluster_auth` output also contains the endpoint and CA bundle required by automation tools. Team members should assume the `cluster_admin_role_arn` output (default `meetinity-eks-admin`) before running the command.
 
 ## State Management
 

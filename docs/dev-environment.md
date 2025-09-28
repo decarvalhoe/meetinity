@@ -93,3 +93,46 @@ docker compose --env-file .env.dev -f docker-compose.dev.yml down --remove-orpha
 
 Pour toute contribution ou amélioration, ouvrez une Pull Request sur ce dépôt après avoir mis à jour la documentation si
 nécessaire.
+
+## Accès au cluster Kubernetes managé
+
+L'infrastructure cloud provisionne un cluster Amazon EKS dans la région `eu-west-1`. Après l'exécution de Terraform :
+
+1. Assurez-vous d'avoir une session AWS valide avec les droits de base (via SSO ou `aws configure`).
+2. Prenez le rôle IAM d'administration du cluster (par défaut `meetinity-eks-admin`) :
+
+   ```bash
+   aws sts assume-role --role-arn $(terraform output -raw cluster_admin_role_arn) --role-session-name admin-session
+   ```
+
+   Exportez ensuite les identifiants temporaires renvoyés (`AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_SESSION_TOKEN`).
+3. Générez le contexte kubeconfig :
+
+   ```bash
+   aws eks update-kubeconfig \
+     --region eu-west-1 \
+     --name $(terraform output -raw cluster_name)
+   ```
+
+4. Vérifiez l'accès :
+
+   ```bash
+   kubectl get nodes
+   ```
+
+### Onboarding RBAC pour un·e nouvel·le équipier·ère
+
+Les accès Kubernetes sont fédérés via IAM. Pour ajouter une personne :
+
+1. Créez (ou identifiez) un utilisateur ou un rôle IAM pouvant être assumé par la personne.
+2. Ajoutez l'ARN correspondant à la variable Terraform `cluster_admin_principal_arns` (ou créez un nouvel `aws_eks_access_entry` si un rôle avec des droits plus limités est requis).
+3. Appliquez la configuration Terraform :
+
+   ```bash
+   terraform apply -var-file=env.tfvars
+   ```
+
+4. Communiquez à la personne le rôle à assumer puis le workflow `aws eks update-kubeconfig` ci-dessus.
+
+Le contrôleur d'ingress NGINX et cert-manager sont installés automatiquement ; les certificats TLS par défaut sont auto-signés.
+Pour utiliser un certificat public, déployez un nouvel `Issuer/ClusterIssuer` cert-manager et associez-le à vos Ingress.

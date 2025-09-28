@@ -88,3 +88,27 @@ variable "node_group_config" {
     disk_size      = 50
   }
 }
+
+variable "cluster_admin_role_name" {
+  description = "Friendly name for the IAM role mapped to Kubernetes cluster-admin."
+  type        = string
+  default     = "meetinity-eks-admin"
+}
+
+variable "cluster_admin_principal_arns" {
+  description = "IAM principal ARNs allowed to assume the cluster-admin role in addition to the account root."
+  type        = list(string)
+  default     = []
+}
+
+variable "default_tls_dns_names" {
+  description = "DNS names included in the default ingress TLS certificate."
+  type        = list(string)
+  default     = ["meetinity.local"]
+}
+
+variable "default_tls_secret_name" {
+  description = "Name of the Kubernetes secret storing the default ingress TLS certificate."
+  type        = string
+  default     = "meetinity-ingress-tls"
+}
