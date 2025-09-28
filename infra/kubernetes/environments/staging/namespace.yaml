@@ -1,0 +1,86 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: meetinity-staging
+  labels:
+    app.kubernetes.io/part-of: meetinity
+    meetinity.io/environment: staging
+    networking.meetinity.io/ingress-allowed: "true"
+  annotations:
+    meetinity.io/purpose: staging workloads for Meetinity
+---
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: meetinity-staging-compute
+  namespace: meetinity-staging
+spec:
+  hard:
+    requests.cpu: "8"
+    requests.memory: 16Gi
+    limits.cpu: "12"
+    limits.memory: 24Gi
+    pods: "60"
+    services.loadbalancers: "4"
+---
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: meetinity-staging-defaults
+  namespace: meetinity-staging
+spec:
+  limits:
+    - type: Container
+      default:
+        cpu: 750m
+        memory: 768Mi
+      defaultRequest:
+        cpu: 200m
+        memory: 256Mi
+      max:
+        cpu: "3"
+        memory: 4Gi
+      min:
+        cpu: 100m
+        memory: 128Mi
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: meetinity-staging-default
+  namespace: meetinity-staging
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              meetinity.io/environment: staging
+        - namespaceSelector:
+            matchLabels:
+              networking.meetinity.io/ingress-allowed: "true"
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              meetinity.io/environment: staging
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+      ports:
+        - protocol: TCP
+          port: 443
+        - protocol: TCP
+          port: 80

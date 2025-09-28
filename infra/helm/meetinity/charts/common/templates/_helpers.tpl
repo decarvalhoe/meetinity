@@ -156,5 +156,41 @@ spec:
   dataFrom:
     - extract:
         key: {{ .path }}
-  {{- end }}
+{{- end }}
+
+{{- define "common.environment" -}}
+{{- $env := "" -}}
+{{- with .Values.environment -}}
+  {{- $env = . -}}
+{{- end -}}
+{{- if not $env -}}
+  {{- with .Values.global -}}
+    {{- with .environment -}}
+      {{- $env = . -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+{{- if not $env -}}
+  {{- $env = .Release.Namespace -}}
+{{- end -}}
+{{- if not $env -}}
+  {{- fail "environment value is required (set values.environment or global.environment)" -}}
+{{- end -}}
+{{- $sanitized := regexReplaceAll "[^a-z0-9-]" (lower $env) "-" -}}
+{{- $sanitized = trimSuffix "-" $sanitized -}}
+{{- if not $sanitized -}}
+  {{- fail (printf "environment value '%s' resolves to an empty identifier" $env) -}}
+{{- end -}}
+{{- $sanitized -}}
+{{- end -}}
+
+{{- define "common.releaseName" -}}
+{{- $ctx := .context | default . -}}
+{{- $name := .name -}}
+{{- if not $name -}}
+  {{- fail "name is required for common.releaseName" -}}
+{{- end -}}
+{{- $env := include "common.environment" $ctx -}}
+{{- printf "%s-%s" $name $env | trunc 63 | trimSuffix "-" -}}
+{{- end -}}
 {{- end }}

@@ -2,25 +2,29 @@
 {{- default .Chart.Name .Values.nameOverride | trunc 63 | trimSuffix "-" -}}
 {{- end -}}
 
+{{- define "matching-service.releaseName" -}}
+{{- include "common.releaseName" (dict "context" . "name" (include "matching-service.name" .)) -}}
+{{- end -}}
+
 {{- define "matching-service.fullname" -}}
 {{- if .Values.fullnameOverride -}}
 {{- .Values.fullnameOverride | trunc 63 | trimSuffix "-" -}}
 {{- else -}}
-{{- printf "%s-%s" .Release.Name (include "matching-service.name" .) | trunc 63 | trimSuffix "-" -}}
+{{- include "matching-service.releaseName" . -}}
 {{- end -}}
 {{- end -}}
 
 {{- define "matching-service.labels" -}}
 helm.sh/chart: {{ .Chart.Name }}-{{ .Chart.Version | replace "+" "_" }}
 app.kubernetes.io/name: {{ include "matching-service.name" . }}
-app.kubernetes.io/instance: {{ .Release.Name }}
+app.kubernetes.io/instance: {{ include "matching-service.releaseName" . }}
 app.kubernetes.io/version: {{ .Chart.AppVersion }}
 app.kubernetes.io/managed-by: {{ .Release.Service }}
 {{- end -}}
 
 {{- define "matching-service.selectorLabels" -}}
 app.kubernetes.io/name: {{ include "matching-service.name" . }}
-app.kubernetes.io/instance: {{ .Release.Name }}
+app.kubernetes.io/instance: {{ include "matching-service.releaseName" . }}
 {{- end -}}
 
 {{- define "matching-service.serviceAccountName" -}}
