@@ -47,6 +47,8 @@ Contributions are welcome! Before opening a pull request, make sure to:
 - Keep documentation in sync with the codebase—update READMEs and diagrams when behaviour evolves.
 - Adhere to the coding guidelines provided in each service repository.
 
+For an overview of the current backlog and recently closed work, refer to the [Git issues summary](docs/issues.md).
+
 Feel free to open an issue to discuss significant changes or to ask for clarification on the architecture.
 
 ## Global Progress

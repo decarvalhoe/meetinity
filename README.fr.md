@@ -39,3 +39,5 @@ Pour commencer avec le projet Meetinity, vous devrez cloner chacun des repositor
 
 Le projet dispose d'une base solide avec une architecture bien définie et des composants fonctionnels. L'effort principal doit maintenant se concentrer sur l'intégration des services avec une base de données réelle et la mise en place de l'environnement de production.
 
+Pour suivre l'état des issues Git et des sujets récemment clôturés, consultez le [résumé dédié](docs/issues.md).
+
