@@ -1,0 +1,78 @@
+name: CD
+
+on:
+  push:
+    branches:
+      - main
+
+env:
+  IMAGE_NAME: api-gateway
+  CHART_PATH: infra/helm/api-gateway
+
+jobs:
+  deploy:
+    name: Build, Push & Deploy
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+          mask-aws-account-id: true
+
+      - name: Log in to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Extract branch name
+        id: source
+        run: echo "branch=${GITHUB_REF##*/}" >> "$GITHUB_OUTPUT"
+
+      - name: Build Docker image
+        run: |
+          docker build \
+            --build-arg GIT_SHA=${GITHUB_SHA} \
+            --tag ${{ secrets.ECR_REGISTRY }}/${{ env.IMAGE_NAME }}:${GITHUB_SHA} \
+            --tag ${{ secrets.ECR_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.source.outputs.branch }} \
+            .
+
+      - name: Push Docker image
+        run: |
+          docker push ${{ secrets.ECR_REGISTRY }}/${{ env.IMAGE_NAME }}:${GITHUB_SHA}
+          docker push ${{ secrets.ECR_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.source.outputs.branch }}
+
+      - name: Update kubeconfig for cluster
+        id: update_kubeconfig
+        run: |
+          aws eks update-kubeconfig \
+            --name ${{ secrets.EKS_CLUSTER_NAME }} \
+            --region ${{ secrets.AWS_REGION }}
+
+      - name: Create namespace if needed
+        run: |
+          kubectl create namespace ${{ secrets.K8S_NAMESPACE }} --dry-run=client -o yaml | kubectl apply -f -
+
+      - name: Create or update Docker registry secret
+        run: |
+          kubectl create secret docker-registry ecr-pull-secret \
+            --namespace ${{ secrets.K8S_NAMESPACE }} \
+            --docker-server=${{ secrets.ECR_REGISTRY }} \
+            --docker-username=AWS \
+            --docker-password=$(aws ecr get-login-password --region ${{ secrets.AWS_REGION }}) \
+            --dry-run=client -o yaml | kubectl apply -f -
+
+      - name: Helm upgrade
+        run: |
+          helm upgrade --install meetinity ${{ env.CHART_PATH }} \
+            --namespace ${{ secrets.K8S_NAMESPACE }} \
+            --set image.repository=${{ secrets.ECR_REGISTRY }}/${{ env.IMAGE_NAME }} \
+            --set image.tag=${GITHUB_SHA} \
+            --set imagePullSecrets[0].name=ecr-pull-secret

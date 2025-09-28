@@ -1,0 +1,107 @@
+name: CI
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+
+jobs:
+  build:
+    name: Build & Lint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      - name: Install Node.js dependencies
+        if: ${{ hashFiles('**/package-lock.json') != '' }}
+        run: npm ci
+
+      - name: Skip Node.js install
+        if: ${{ hashFiles('**/package-lock.json') == '' }}
+        run: echo 'No package-lock.json found. Skipping Node.js dependency installation.'
+
+      - name: Run lint
+        if: ${{ hashFiles('**/package.json') != '' }}
+        run: |
+          if npm run | grep -q "lint"; then
+            npm run lint
+          else
+            echo 'No lint script found in package.json. Skipping lint.'
+          fi
+
+      - name: Skip lint
+        if: ${{ hashFiles('**/package.json') == '' }}
+        run: echo 'No package.json found. Skipping lint.'
+
+  test:
+    name: Tests
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      - name: Install Node.js dependencies
+        if: ${{ hashFiles('**/package-lock.json') != '' }}
+        run: npm ci
+
+      - name: Skip Node.js install
+        if: ${{ hashFiles('**/package-lock.json') == '' }}
+        run: echo 'No package-lock.json found. Skipping Node.js dependency installation.'
+
+      - name: Run tests
+        if: ${{ hashFiles('**/package.json') != '' }}
+        run: |
+          if npm run | grep -q " test"; then
+            npm test -- --watch=false || npm test
+          else
+            echo 'No test script found in package.json. Skipping tests.'
+          fi
+
+      - name: Skip tests
+        if: ${{ hashFiles('**/package.json') == '' }}
+        run: echo 'No package.json found. Skipping tests.'
+
+  security_scan:
+    name: Security Scan
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      - name: Install Node.js dependencies
+        if: ${{ hashFiles('**/package-lock.json') != '' }}
+        run: npm ci
+
+      - name: Skip Node.js install
+        if: ${{ hashFiles('**/package-lock.json') == '' }}
+        run: echo 'No package-lock.json found. Skipping Node.js dependency installation.'
+
+      - name: Run npm audit
+        if: ${{ hashFiles('**/package-lock.json') != '' }}
+        run: npm audit --production
+
+      - name: Skip npm audit
+        if: ${{ hashFiles('**/package-lock.json') == '' }}
+        run: echo 'No Node.js lockfile found. Skipping npm audit.'
+

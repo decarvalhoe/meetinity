@@ -1,10 +1,17 @@
 # Meetinity Project
 
+[![CI](https://github.com/meetinity/meetinity/actions/workflows/ci.yml/badge.svg)](https://github.com/meetinity/meetinity/actions/workflows/ci.yml)
+[![CD](https://github.com/meetinity/meetinity/actions/workflows/cd.yml/badge.svg)](https://github.com/meetinity/meetinity/actions/workflows/cd.yml)
+
 **Meetinity** is a professional networking platform designed to help users connect, discover events, and grow their professional network. This repository serves as the main entry point for the project, providing a comprehensive overview of the architecture and the different services that compose the platform.
 
 ## Project Overview
 
 The Meetinity platform is built on a microservices architecture, with a React-based mobile application and an administration portal. The project is divided into seven main repositories, each responsible for a specific part of the platform.
+
+## Automation
+
+Continuous integration and delivery pipelines are defined in [`.github/workflows`](.github/workflows). Refer to the [workflow README](.github/workflows/README.md) for the list of required secrets and additional configuration guidance.
 
 ### Architecture
 
