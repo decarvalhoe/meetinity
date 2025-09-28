@@ -1,0 +1,16 @@
+global:
+  domain: meetinity.com
+  secretStores:
+    default:
+      name: meetinity-vault
+      kind: ClusterSecretStore
+
+shared:
+  configMaps:
+    platform-settings:
+      annotations: {}
+      data:
+        FEATURE_FLAGS: "false"
+        DEFAULT_TIMEZONE: "UTC"
+  sealedSecrets: []
+  vaultSecrets: []

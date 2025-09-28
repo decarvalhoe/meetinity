@@ -1,5 +1,0 @@
-apiVersion: v2
-name: user-service
-description: Deploys the Meetinity User Service API.
-version: 0.1.0
-appVersion: "1.0.0"

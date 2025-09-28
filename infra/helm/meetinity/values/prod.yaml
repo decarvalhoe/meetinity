@@ -1,0 +1,100 @@
+global:
+  domain: meetinity.com
+  secretStores:
+    default:
+      name: vault-prod
+      kind: ClusterSecretStore
+
+shared:
+  configMaps:
+    platform-settings:
+      data:
+        FEATURE_FLAGS: "false"
+        DEFAULT_TIMEZONE: "UTC"
+  sealedSecrets:
+    - name: platform-tls
+      encryptedData:
+        tls.crt: PLACEHOLDER_PROD_CERT
+        tls.key: PLACEHOLDER_PROD_KEY
+  vaultSecrets:
+    - name: platform-database
+      path: kv/data/prod/platform/database
+      secretStoreRef:
+        name: vault-prod
+      target:
+        template:
+          type: Opaque
+          data:
+            DATABASE_URL: '{{ .data.database_url }}'
+
+api-gateway:
+  environment: prod
+  domain: meetinity.com
+  image:
+    tag: v1.0.0
+  autoscaling:
+    minReplicas: 4
+    maxReplicas: 12
+  vaultSecrets:
+    - name: api-gateway-env
+      path: kv/data/prod/api-gateway/app
+      secretStoreRef:
+        name: vault-prod
+      target:
+        template:
+          type: Opaque
+          data:
+            DATABASE_URL: '{{ .data.database_url }}'
+            REDIS_URL: '{{ .data.redis_url }}'
+            LOG_LEVEL: '{{ .data.log_level | default "warn" }}'
+
+user-service:
+  environment: prod
+  domain: meetinity.com
+  autoscaling:
+    minReplicas: 3
+    maxReplicas: 8
+  vaultSecrets:
+    - name: user-service-db
+      path: kv/data/prod/user-service/database
+      secretStoreRef:
+        name: vault-prod
+      target:
+        template:
+          type: Opaque
+          data:
+            url: '{{ .data.url }}'
+
+matching-service:
+  environment: prod
+  domain: meetinity.com
+  autoscaling:
+    minReplicas: 2
+    maxReplicas: 6
+  vaultSecrets:
+    - name: matching-service-env
+      path: kv/data/prod/matching-service/app
+      secretStoreRef:
+        name: vault-prod
+      target:
+        template:
+          type: Opaque
+          data:
+            MATCHING_THRESHOLD: '{{ .data.matching_threshold | default "0.85" }}'
+
+event-service:
+  environment: prod
+  domain: meetinity.com
+  autoscaling:
+    minReplicas: 3
+    maxReplicas: 8
+  vaultSecrets:
+    - name: event-service-env
+      path: kv/data/prod/event-service/app
+      secretStoreRef:
+        name: vault-prod
+      target:
+        template:
+          type: Opaque
+          data:
+            EVENT_CATALOG_URL: '{{ .data.catalog_url }}'
