@@ -30,11 +30,54 @@ shared:
 api-gateway:
   environment: prod
   domain: meetinity.com
+  replicaCount: 4
   image:
     tag: v1.0.0
   autoscaling:
     minReplicas: 4
     maxReplicas: 12
+    metrics:
+      - type: Resource
+        resource:
+          name: cpu
+          target:
+            type: Utilization
+            averageUtilization: 70
+      - type: Resource
+        resource:
+          name: memory
+          target:
+            type: Utilization
+            averageUtilization: 80
+      - type: Pods
+        pods:
+          metric:
+            name: http_requests_per_second
+          target:
+            type: AverageValue
+            averageValue: "60"
+  resources:
+    requests:
+      cpu: 600m
+      memory: 768Mi
+    limits:
+      cpu: 1200m
+      memory: 1536Mi
+  podDisruptionBudget:
+    minAvailable: 2
+  vpa:
+    enabled: true
+    updatePolicy:
+      updateMode: "Off"
+    resourcePolicy:
+      containerPolicies:
+        - containerName: "*"
+          minAllowed:
+            cpu: 400m
+            memory: 512Mi
+          maxAllowed:
+            cpu: 3000m
+            memory: 4Gi
   vaultSecrets:
     - name: api-gateway-env
       path: kv/data/prod/api-gateway/app
@@ -51,9 +94,52 @@ api-gateway:
 user-service:
   environment: prod
   domain: meetinity.com
+  replicaCount: 3
   autoscaling:
     minReplicas: 3
     maxReplicas: 8
+    metrics:
+      - type: Resource
+        resource:
+          name: cpu
+          target:
+            type: Utilization
+            averageUtilization: 65
+      - type: Resource
+        resource:
+          name: memory
+          target:
+            type: Utilization
+            averageUtilization: 75
+      - type: Pods
+        pods:
+          metric:
+            name: user_profile_sync_per_second
+          target:
+            type: AverageValue
+            averageValue: "20"
+  resources:
+    requests:
+      cpu: 350m
+      memory: 448Mi
+    limits:
+      cpu: 800m
+      memory: 896Mi
+  podDisruptionBudget:
+    minAvailable: 2
+  vpa:
+    enabled: true
+    updatePolicy:
+      updateMode: "Off"
+    resourcePolicy:
+      containerPolicies:
+        - containerName: "*"
+          minAllowed:
+            cpu: 300m
+            memory: 384Mi
+          maxAllowed:
+            cpu: 2000m
+            memory: 3Gi
   vaultSecrets:
     - name: user-service-db
       path: kv/data/prod/user-service/database
@@ -68,9 +154,52 @@ user-service:
 matching-service:
   environment: prod
   domain: meetinity.com
+  replicaCount: 3
   autoscaling:
     minReplicas: 2
     maxReplicas: 6
+    metrics:
+      - type: Resource
+        resource:
+          name: cpu
+          target:
+            type: Utilization
+            averageUtilization: 65
+      - type: Resource
+        resource:
+          name: memory
+          target:
+            type: Utilization
+            averageUtilization: 75
+      - type: Pods
+        pods:
+          metric:
+            name: matches_computed_per_second
+          target:
+            type: AverageValue
+            averageValue: "25"
+  resources:
+    requests:
+      cpu: 350m
+      memory: 448Mi
+    limits:
+      cpu: 800m
+      memory: 896Mi
+  podDisruptionBudget:
+    minAvailable: 2
+  vpa:
+    enabled: true
+    updatePolicy:
+      updateMode: "Off"
+    resourcePolicy:
+      containerPolicies:
+        - containerName: "*"
+          minAllowed:
+            cpu: 300m
+            memory: 384Mi
+          maxAllowed:
+            cpu: 2000m
+            memory: 3Gi
   vaultSecrets:
     - name: matching-service-env
       path: kv/data/prod/matching-service/app
@@ -85,9 +214,52 @@ matching-service:
 event-service:
   environment: prod
   domain: meetinity.com
+  replicaCount: 3
   autoscaling:
     minReplicas: 3
     maxReplicas: 8
+    metrics:
+      - type: Resource
+        resource:
+          name: cpu
+          target:
+            type: Utilization
+            averageUtilization: 65
+      - type: Resource
+        resource:
+          name: memory
+          target:
+            type: Utilization
+            averageUtilization: 75
+      - type: Pods
+        pods:
+          metric:
+            name: events_processed_per_second
+          target:
+            type: AverageValue
+            averageValue: "40"
+  resources:
+    requests:
+      cpu: 350m
+      memory: 512Mi
+    limits:
+      cpu: 900m
+      memory: 1228Mi
+  podDisruptionBudget:
+    minAvailable: 2
+  vpa:
+    enabled: true
+    updatePolicy:
+      updateMode: "Off"
+    resourcePolicy:
+      containerPolicies:
+        - containerName: "*"
+          minAllowed:
+            cpu: 300m
+            memory: 384Mi
+          maxAllowed:
+            cpu: 2200m
+            memory: 3Gi
   vaultSecrets:
     - name: event-service-env
       path: kv/data/prod/event-service/app

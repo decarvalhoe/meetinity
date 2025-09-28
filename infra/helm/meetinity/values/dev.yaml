@@ -26,10 +26,36 @@ shared:
 api-gateway:
   environment: dev
   domain: dev.meetinity.internal
+  replicaCount: 1
   image:
     tag: dev
   ingress:
     tlsSecretName: api-gateway-dev-tls
+  autoscaling:
+    minReplicas: 1
+    maxReplicas: 3
+    metrics:
+      - type: Resource
+        resource:
+          name: cpu
+          target:
+            type: Utilization
+            averageUtilization: 60
+      - type: Resource
+        resource:
+          name: memory
+          target:
+            type: Utilization
+            averageUtilization: 70
+  resources:
+    requests:
+      cpu: 150m
+      memory: 192Mi
+    limits:
+      cpu: 300m
+      memory: 384Mi
+  podDisruptionBudget:
+    minAvailable: 1
   vaultSecrets:
     - name: api-gateway-env
       path: kv/data/dev/api-gateway/app
@@ -50,6 +76,32 @@ api-gateway:
 user-service:
   environment: dev
   domain: dev.meetinity.internal
+  replicaCount: 1
+  autoscaling:
+    minReplicas: 1
+    maxReplicas: 3
+    metrics:
+      - type: Resource
+        resource:
+          name: cpu
+          target:
+            type: Utilization
+            averageUtilization: 60
+      - type: Resource
+        resource:
+          name: memory
+          target:
+            type: Utilization
+            averageUtilization: 70
+  resources:
+    requests:
+      cpu: 120m
+      memory: 192Mi
+    limits:
+      cpu: 250m
+      memory: 384Mi
+  podDisruptionBudget:
+    minAvailable: 1
   vaultSecrets:
     - name: user-service-db
       path: kv/data/dev/user-service/database
@@ -64,6 +116,32 @@ user-service:
 matching-service:
   environment: dev
   domain: dev.meetinity.internal
+  replicaCount: 1
+  autoscaling:
+    minReplicas: 1
+    maxReplicas: 2
+    metrics:
+      - type: Resource
+        resource:
+          name: cpu
+          target:
+            type: Utilization
+            averageUtilization: 55
+      - type: Resource
+        resource:
+          name: memory
+          target:
+            type: Utilization
+            averageUtilization: 65
+  resources:
+    requests:
+      cpu: 120m
+      memory: 192Mi
+    limits:
+      cpu: 250m
+      memory: 384Mi
+  podDisruptionBudget:
+    minAvailable: 1
   vaultSecrets:
     - name: matching-service-env
       path: kv/data/dev/matching-service/app
@@ -78,6 +156,32 @@ matching-service:
 event-service:
   environment: dev
   domain: dev.meetinity.internal
+  replicaCount: 1
+  autoscaling:
+    minReplicas: 1
+    maxReplicas: 3
+    metrics:
+      - type: Resource
+        resource:
+          name: cpu
+          target:
+            type: Utilization
+            averageUtilization: 55
+      - type: Resource
+        resource:
+          name: memory
+          target:
+            type: Utilization
+            averageUtilization: 65
+  resources:
+    requests:
+      cpu: 120m
+      memory: 192Mi
+    limits:
+      cpu: 250m
+      memory: 384Mi
+  podDisruptionBudget:
+    minAvailable: 1
   vaultSecrets:
     - name: event-service-env
       path: kv/data/dev/event-service/app

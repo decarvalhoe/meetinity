@@ -30,8 +30,36 @@ autoscaling:
   enabled: true
   minReplicas: 2
   maxReplicas: 6
-  targetCPUUtilizationPercentage: 70
-  targetMemoryUtilizationPercentage: 80
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: 80
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 60
+      policies:
+        - type: Percent
+          value: 100
+          periodSeconds: 60
+    scaleDown:
+      stabilizationWindowSeconds: 300
+      policies:
+        - type: Percent
+          value: 100
+          periodSeconds: 300
+
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 1
 
 resources:
   requests:
@@ -40,6 +68,20 @@ resources:
   limits:
     cpu: 500m
     memory: 512Mi
+
+vpa:
+  enabled: false
+  updatePolicy:
+    updateMode: "Off"
+  resourcePolicy:
+    containerPolicies:
+      - containerName: "*"
+        minAllowed:
+          cpu: 150m
+          memory: 256Mi
+        maxAllowed:
+          cpu: 2
+          memory: 2Gi
 
 env: []
 

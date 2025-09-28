@@ -30,8 +30,36 @@ autoscaling:
   enabled: true
   minReplicas: 2
   maxReplicas: 5
-  targetCPUUtilizationPercentage: 65
-  targetMemoryUtilizationPercentage: 75
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 65
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: 75
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 60
+      policies:
+        - type: Percent
+          value: 100
+          periodSeconds: 60
+    scaleDown:
+      stabilizationWindowSeconds: 300
+      policies:
+        - type: Percent
+          value: 100
+          periodSeconds: 300
+
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 1
 
 resources:
   requests:
@@ -40,6 +68,20 @@ resources:
   limits:
     cpu: 400m
     memory: 512Mi
+
+vpa:
+  enabled: false
+  updatePolicy:
+    updateMode: "Off"
+  resourcePolicy:
+    containerPolicies:
+      - containerName: "*"
+        minAllowed:
+          cpu: 100m
+          memory: 256Mi
+        maxAllowed:
+          cpu: 1500m
+          memory: 2Gi
 
 env:
   - name: FLASK_ENV
