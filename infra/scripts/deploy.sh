@@ -3,11 +3,24 @@ set -euo pipefail
 
 ENVIRONMENT="${1:-dev}"
 AWS_REGION="${AWS_REGION:-eu-west-1}"
-DOMAIN="${DOMAIN:-meetinity.com}"
 TF_DIR="$(dirname "$0")/../terraform"
 HELM_DIR="$(dirname "$0")/../helm"
+K8S_DIR="$(dirname "$0")/../kubernetes"
 MONITORING_DIR="$(dirname "$0")/../monitoring"
 SECURITY_DIR="$(dirname "$0")/../security"
+NAMESPACE="meetinity-${ENVIRONMENT}"
+HELM_VALUES_DIR="${HELM_DIR}/meetinity/values"
+K8S_ENV_DIR="${K8S_DIR}/environments/${ENVIRONMENT}"
+
+if [[ ! -d "$K8S_ENV_DIR" ]]; then
+  echo "Unknown environment '${ENVIRONMENT}'. Expected directory ${K8S_ENV_DIR}" >&2
+  exit 1
+fi
+
+if [[ ! -f "${HELM_VALUES_DIR}/${ENVIRONMENT}.yaml" ]]; then
+  echo "Missing Helm values file for environment '${ENVIRONMENT}'" >&2
+  exit 1
+fi
 
 function log() {
   echo "[deploy] $*"
@@ -40,12 +53,23 @@ log "Applying ClusterIssuer and network policies"
 kubectl apply -f "$SECURITY_DIR/cluster-issuer.yaml"
 kubectl apply -f "$SECURITY_DIR/network-policies"
 
-log "Deploying application charts"
-for chart in api-gateway user-service matching-service event-service; do
-  helm upgrade --install "$chart" "$HELM_DIR/$chart" \
-    --namespace default \
-    --set environment="$ENVIRONMENT" \
-    --set domain="$DOMAIN"
+log "Provisioning namespace, quotas and network policies"
+kubectl apply -f "${K8S_ENV_DIR}/namespace.yaml"
+
+log "Deploying umbrella chart"
+helm upgrade --install "meetinity-${ENVIRONMENT}" "$HELM_DIR/meetinity" \
+  --namespace "$NAMESPACE" \
+  --create-namespace \
+  --values "$HELM_DIR/meetinity/values.yaml" \
+  --values "${HELM_VALUES_DIR}/${ENVIRONMENT}.yaml" \
+  --set-string global.environment="$ENVIRONMENT" \
+  --wait
+
+log "Waiting for core services to be ready"
+for svc in api-gateway user-service matching-service event-service; do
+  kubectl rollout status deployment/"${svc}-${ENVIRONMENT}" \
+    --namespace "$NAMESPACE" \
+    --timeout=5m
 done
 
 log "Deploying monitoring stack"

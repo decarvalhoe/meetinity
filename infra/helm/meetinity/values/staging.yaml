@@ -1,4 +1,5 @@
 global:
+  environment: staging
   domain: staging.meetinity.com
   secretStores:
     default:

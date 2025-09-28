@@ -81,7 +81,7 @@ Cette feuille de route détaille les actions nécessaires pour livrer la premiè
   5. Mettre en place la promotion automatisée via pipelines (tag + déploiement progressif).
 - **Livrables** :
   - Namespaces et policies appliqués.
-  - Guide de promotion documenté.
+  - [Guide de promotion documenté](promotion-guide.md).
 
 ---
 

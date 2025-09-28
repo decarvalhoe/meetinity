@@ -1,24 +1,98 @@
-name: CD
+name: Continuous Delivery
 
 on:
   push:
-    branches:
-      - main
+    tags:
+      - 'release/v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version to promote (for example v1.2.3)'
+        required: true
+        type: string
 
 env:
-  IMAGE_NAME: api-gateway
-  CHART_PATH: infra/helm/api-gateway
   REGISTRY: ghcr.io
-  RELEASE_ENV_FALLBACK: production
+  IMAGE_NAME: api-gateway
+  CHART_PATH: infra/helm/meetinity
+  VALUES_PATH: infra/helm/meetinity/values
+  K8S_ENV_PATH: infra/kubernetes/environments
 
 jobs:
-  deploy:
-    name: Build, Push & Deploy
+  build:
+    name: Build & publish container image
     runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
+    outputs:
+      image_uri: ${{ steps.meta.outputs.image_uri }}
+      release_version: ${{ steps.meta.outputs.release_version }}
+      short_sha: ${{ steps.meta.outputs.short_sha }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Determine release metadata
+        id: meta
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            version="${{ inputs.version }}"
+          else
+            ref="${GITHUB_REF_NAME}"
+            version="${ref#release/}"
+          fi
+
+          version="${version#refs/tags/}"
+          if [ -z "$version" ]; then
+            echo "Unable to determine release version" >&2
+            exit 1
+          fi
+
+          short_sha="${GITHUB_SHA::7}"
+          owner="${GITHUB_REPOSITORY_OWNER,,}"
+          image_uri="${{ env.REGISTRY }}/$owner/${{ env.IMAGE_NAME }}"
+
+          echo "image_uri=$image_uri" >> "$GITHUB_OUTPUT"
+          echo "release_version=$version" >> "$GITHUB_OUTPUT"
+          echo "short_sha=$short_sha" >> "$GITHUB_OUTPUT"
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build Docker image
+        run: |
+          docker build \
+            --build-arg GIT_SHA=${GITHUB_SHA} \
+            --tag ${{ steps.meta.outputs.image_uri }}:${{ steps.meta.outputs.release_version }} \
+            --tag ${{ steps.meta.outputs.image_uri }}:sha-${{ steps.meta.outputs.short_sha }} \
+            .
+
+      - name: Push Docker image
+        run: |
+          docker push ${{ steps.meta.outputs.image_uri }}:${{ steps.meta.outputs.release_version }}
+          docker push ${{ steps.meta.outputs.image_uri }}:sha-${{ steps.meta.outputs.short_sha }}
+
+  deploy-dev:
+    name: Deploy to dev
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: dev
+      url: https://dev.meetinity.internal
+    permissions:
+      contents: read
       id-token: write
+    env:
+      RELEASE_NAME: meetinity-dev
+      NAMESPACE: meetinity-dev
+      VALUES_FILE: infra/helm/meetinity/values/dev.yaml
+      ENVIRONMENT_KEY: dev
+      K8S_MANIFEST: infra/kubernetes/environments/dev/namespace.yaml
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -31,90 +105,176 @@ jobs:
           aws-region: ${{ secrets.AWS_REGION }}
           mask-aws-account-id: true
 
-      - name: Log in to GitHub Container Registry
-        uses: docker/login-action@v3
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Derive registry scope
-        id: registry
-        run: |
-          owner="${GITHUB_REPOSITORY_OWNER,,}"
-          echo "owner=$owner" >> "$GITHUB_OUTPUT"
-          echo "REGISTRY_OWNER=$owner" >> "$GITHUB_ENV"
-
-      - name: Set image tagging metadata
-        run: |
-          short_sha="${GITHUB_SHA::7}"
-          branch="${GITHUB_REF_NAME}"
-          branch=${branch//\//-}
-          branch=$(echo "$branch" | tr '[:upper:]' '[:lower:]')
-          branch=$(echo "$branch" | sed 's/[^a-z0-9_.-]/-/g')
-          chart_file="${{ env.CHART_PATH }}/Chart.yaml"
-          app_version=$(grep '^appVersion:' "$chart_file" | head -n1 | awk '{print $2}' | tr -d '"')
-          if [ -z "$app_version" ]; then
-            app_version=$(grep '^version:' "$chart_file" | head -n1 | awk '{print $2}' | tr -d '"')
-          fi
-          if [ -z "$app_version" ]; then
-            echo "Unable to determine app version from $chart_file" >&2
-            exit 1
-          fi
-
-          release_env="${{ secrets.RELEASE_ENVIRONMENT }}"
-          if [ -z "$release_env" ]; then
-            release_env="${{ env.RELEASE_ENV_FALLBACK }}"
-          fi
-          release_env=$(echo "$release_env" | tr '[:upper:]' '[:lower:]')
-          release_env=$(echo "$release_env" | sed 's/[^a-z0-9_.-]/-/g')
-
-          echo "SHORT_SHA=$short_sha" >> "$GITHUB_ENV"
-          echo "BRANCH_NAME=$branch" >> "$GITHUB_ENV"
-          echo "APP_VERSION=$app_version" >> "$GITHUB_ENV"
-          echo "RELEASE_ENV=$release_env" >> "$GITHUB_ENV"
-          image_uri="${{ env.REGISTRY }}/${REGISTRY_OWNER}/${{ env.IMAGE_NAME }}"
-          echo "IMAGE_URI=$image_uri" >> "$GITHUB_ENV"
-
-      - name: Build Docker image
-        run: |
-          docker build \
-            --build-arg GIT_SHA=${GITHUB_SHA} \
-            --tag ${IMAGE_URI}:${BRANCH_NAME}-${SHORT_SHA} \
-            --tag ${IMAGE_URI}:${RELEASE_ENV}-release \
-            --tag ${IMAGE_URI}:${APP_VERSION} \
-            .
-
-      - name: Push Docker image
-        run: |
-          docker push ${IMAGE_URI}:${BRANCH_NAME}-${SHORT_SHA}
-          docker push ${IMAGE_URI}:${RELEASE_ENV}-release
-          docker push ${IMAGE_URI}:${APP_VERSION}
-
       - name: Update kubeconfig for cluster
-        id: update_kubeconfig
         run: |
           aws eks update-kubeconfig \
             --name ${{ secrets.EKS_CLUSTER_NAME }} \
             --region ${{ secrets.AWS_REGION }}
 
-      - name: Create namespace if needed
+      - name: Apply namespace resources
         run: |
-          kubectl create namespace ${{ secrets.K8S_NAMESPACE }} --dry-run=client -o yaml | kubectl apply -f -
+          kubectl apply -f "${K8S_MANIFEST}"
 
-      - name: Create or update Docker registry secret
+      - name: Create or update GHCR registry secret
         run: |
           kubectl create secret docker-registry ghcr-pull-secret \
-            --namespace ${{ secrets.K8S_NAMESPACE }} \
+            --namespace "${NAMESPACE}" \
             --docker-server=${{ env.REGISTRY }} \
             --docker-username=${{ secrets.GHCR_READER_USERNAME }} \
             --docker-password=${{ secrets.GHCR_READER_TOKEN }} \
             --dry-run=client -o yaml | kubectl apply -f -
 
-      - name: Helm upgrade
+      - name: Deploy chart
         run: |
-          helm upgrade --install meetinity ${{ env.CHART_PATH }} \
-            --namespace ${{ secrets.K8S_NAMESPACE }} \
-            --set image.repository=${IMAGE_URI} \
-            --set image.tag=${BRANCH_NAME}-${SHORT_SHA} \
-            --set imagePullSecrets[0].name=ghcr-pull-secret
+          helm upgrade --install "${RELEASE_NAME}" "${{ env.CHART_PATH }}" \
+            --namespace "${NAMESPACE}" \
+            --values "${{ env.CHART_PATH }}/values.yaml" \
+            --values "${VALUES_FILE}" \
+            --set-string global.environment="${ENVIRONMENT_KEY}" \
+            --set-string api-gateway.image.repository=${{ needs.build.outputs.image_uri }} \
+            --set-string api-gateway.image.tag=${{ needs.build.outputs.release_version }} \
+            --wait
+
+      - name: Wait for workloads
+        run: |
+          for svc in api-gateway user-service matching-service event-service; do
+            kubectl rollout status deployment/"${svc}-${ENVIRONMENT_KEY}" \
+              --namespace "${NAMESPACE}" \
+              --timeout=5m
+          done
+
+  deploy-staging:
+    name: Deploy to staging
+    needs:
+      - build
+      - deploy-dev
+    runs-on: ubuntu-latest
+    environment:
+      name: staging
+      url: https://staging.meetinity.com
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      RELEASE_NAME: meetinity-staging
+      NAMESPACE: meetinity-staging
+      VALUES_FILE: infra/helm/meetinity/values/staging.yaml
+      ENVIRONMENT_KEY: staging
+      K8S_MANIFEST: infra/kubernetes/environments/staging/namespace.yaml
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+          mask-aws-account-id: true
+
+      - name: Update kubeconfig for cluster
+        run: |
+          aws eks update-kubeconfig \
+            --name ${{ secrets.EKS_CLUSTER_NAME }} \
+            --region ${{ secrets.AWS_REGION }}
+
+      - name: Apply namespace resources
+        run: |
+          kubectl apply -f "${K8S_MANIFEST}"
+
+      - name: Create or update GHCR registry secret
+        run: |
+          kubectl create secret docker-registry ghcr-pull-secret \
+            --namespace "${NAMESPACE}" \
+            --docker-server=${{ env.REGISTRY }} \
+            --docker-username=${{ secrets.GHCR_READER_USERNAME }} \
+            --docker-password=${{ secrets.GHCR_READER_TOKEN }} \
+            --dry-run=client -o yaml | kubectl apply -f -
+
+      - name: Deploy chart
+        run: |
+          helm upgrade --install "${RELEASE_NAME}" "${{ env.CHART_PATH }}" \
+            --namespace "${NAMESPACE}" \
+            --values "${{ env.CHART_PATH }}/values.yaml" \
+            --values "${VALUES_FILE}" \
+            --set-string global.environment="${ENVIRONMENT_KEY}" \
+            --set-string api-gateway.image.repository=${{ needs.build.outputs.image_uri }} \
+            --set-string api-gateway.image.tag=${{ needs.build.outputs.release_version }} \
+            --wait
+
+      - name: Wait for workloads
+        run: |
+          for svc in api-gateway user-service matching-service event-service; do
+            kubectl rollout status deployment/"${svc}-${ENVIRONMENT_KEY}" \
+              --namespace "${NAMESPACE}" \
+              --timeout=5m
+          done
+
+  deploy-prod:
+    name: Deploy to prod
+    needs:
+      - build
+      - deploy-staging
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+      url: https://meetinity.com
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      RELEASE_NAME: meetinity-prod
+      NAMESPACE: meetinity-prod
+      VALUES_FILE: infra/helm/meetinity/values/prod.yaml
+      ENVIRONMENT_KEY: prod
+      K8S_MANIFEST: infra/kubernetes/environments/prod/namespace.yaml
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+          mask-aws-account-id: true
+
+      - name: Update kubeconfig for cluster
+        run: |
+          aws eks update-kubeconfig \
+            --name ${{ secrets.EKS_CLUSTER_NAME }} \
+            --region ${{ secrets.AWS_REGION }}
+
+      - name: Apply namespace resources
+        run: |
+          kubectl apply -f "${K8S_MANIFEST}"
+
+      - name: Create or update GHCR registry secret
+        run: |
+          kubectl create secret docker-registry ghcr-pull-secret \
+            --namespace "${NAMESPACE}" \
+            --docker-server=${{ env.REGISTRY }} \
+            --docker-username=${{ secrets.GHCR_READER_USERNAME }} \
+            --docker-password=${{ secrets.GHCR_READER_TOKEN }} \
+            --dry-run=client -o yaml | kubectl apply -f -
+
+      - name: Deploy chart
+        run: |
+          helm upgrade --install "${RELEASE_NAME}" "${{ env.CHART_PATH }}" \
+            --namespace "${NAMESPACE}" \
+            --values "${{ env.CHART_PATH }}/values.yaml" \
+            --values "${VALUES_FILE}" \
+            --set-string global.environment="${ENVIRONMENT_KEY}" \
+            --set-string api-gateway.image.repository=${{ needs.build.outputs.image_uri }} \
+            --set-string api-gateway.image.tag=${{ needs.build.outputs.release_version }} \
+            --wait
+
+      - name: Wait for workloads
+        run: |
+          for svc in api-gateway user-service matching-service event-service; do
+            kubectl rollout status deployment/"${svc}-${ENVIRONMENT_KEY}" \
+              --namespace "${NAMESPACE}" \
+              --timeout=5m
+          done
