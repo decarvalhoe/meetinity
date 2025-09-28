@@ -33,7 +33,21 @@ Here is a list of the repositories that make up the Meetinity project, along wit
 
 ## Getting Started
 
-To get started with the Meetinity project, you will need to clone each of the repositories listed above. You can then follow the instructions in each repository's README file to install the dependencies and run the services.
+To get started with the Meetinity project, you will need to clone each of the repositories listed above. You can then follow the instructions in each repository's README file to install the dependencies and run the services. For a consolidated view of the local setup shared by the different teams, refer to the [development environment guide](docs/dev-environment.md).
+
+## Development Environment
+
+This repository now provides a `docker-compose.dev.yml` file and helper Makefile targets to orchestrate the API gateway, the microservices, PostgreSQL, and Kafka. The guide in [`docs/dev-environment.md`](docs/dev-environment.md) explains the expected folder structure, required environment variables, and the commands to spin up or tear down the stack.
+
+## Contributing
+
+Contributions are welcome! Before opening a pull request, make sure to:
+
+- Follow the workflow documented in [`docs/dev-environment.md`](docs/dev-environment.md) to validate your changes locally.
+- Keep documentation in sync with the codebase—update READMEs and diagrams when behaviour evolves.
+- Adhere to the coding guidelines provided in each service repository.
+
+Feel free to open an issue to discuss significant changes or to ask for clarification on the architecture.
 
 ## Global Progress
 
