@@ -13,22 +13,40 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Detect Node.js manifests
+        id: node_manifests
+        run: |
+          package_json=$(git ls-files -- ':**/package.json')
+          if [ -n "$package_json" ]; then
+            echo "has_package=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_package=false" >> "$GITHUB_OUTPUT"
+          fi
+
+          lock_files=$(git ls-files -- ':**/package-lock.json' ':**/npm-shrinkwrap.json' ':**/yarn.lock')
+          if [ -n "$lock_files" ]; then
+            echo "has_lock=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_lock=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Set up Node.js
+        if: steps.node_manifests.outputs.has_package == 'true'
         uses: actions/setup-node@v4
         with:
           node-version: '18'
           cache: 'npm'
 
       - name: Install Node.js dependencies
-        if: ${{ hashFiles('**/package-lock.json') != '' }}
+        if: steps.node_manifests.outputs.has_lock == 'true'
         run: npm ci
 
       - name: Skip Node.js install
-        if: ${{ hashFiles('**/package-lock.json') == '' }}
-        run: echo 'No package-lock.json found. Skipping Node.js dependency installation.'
+        if: steps.node_manifests.outputs.has_package == 'true' && steps.node_manifests.outputs.has_lock != 'true'
+        run: echo 'Node.js project detected without a lockfile. Skipping npm ci.'
 
       - name: Run lint
-        if: ${{ hashFiles('**/package.json') != '' }}
+        if: steps.node_manifests.outputs.has_package == 'true'
         run: |
           if npm run | grep -q "lint"; then
             npm run lint
@@ -37,7 +55,7 @@ jobs:
           fi
 
       - name: Skip lint
-        if: ${{ hashFiles('**/package.json') == '' }}
+        if: steps.node_manifests.outputs.has_package != 'true'
         run: echo 'No package.json found. Skipping lint.'
 
   test:
@@ -48,22 +66,40 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Detect Node.js manifests
+        id: node_manifests
+        run: |
+          package_json=$(git ls-files -- ':**/package.json')
+          if [ -n "$package_json" ]; then
+            echo "has_package=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_package=false" >> "$GITHUB_OUTPUT"
+          fi
+
+          lock_files=$(git ls-files -- ':**/package-lock.json' ':**/npm-shrinkwrap.json' ':**/yarn.lock')
+          if [ -n "$lock_files" ]; then
+            echo "has_lock=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_lock=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Set up Node.js
+        if: steps.node_manifests.outputs.has_package == 'true'
         uses: actions/setup-node@v4
         with:
           node-version: '18'
           cache: 'npm'
 
       - name: Install Node.js dependencies
-        if: ${{ hashFiles('**/package-lock.json') != '' }}
+        if: steps.node_manifests.outputs.has_lock == 'true'
         run: npm ci
 
       - name: Skip Node.js install
-        if: ${{ hashFiles('**/package-lock.json') == '' }}
-        run: echo 'No package-lock.json found. Skipping Node.js dependency installation.'
+        if: steps.node_manifests.outputs.has_package == 'true' && steps.node_manifests.outputs.has_lock != 'true'
+        run: echo 'Node.js project detected without a lockfile. Skipping npm ci.'
 
       - name: Run tests
-        if: ${{ hashFiles('**/package.json') != '' }}
+        if: steps.node_manifests.outputs.has_package == 'true'
         run: |
           if npm run | grep -q " test"; then
             npm test -- --watch=false || npm test
@@ -72,7 +108,7 @@ jobs:
           fi
 
       - name: Skip tests
-        if: ${{ hashFiles('**/package.json') == '' }}
+        if: steps.node_manifests.outputs.has_package != 'true'
         run: echo 'No package.json found. Skipping tests.'
 
   security_scan:
@@ -83,25 +119,43 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Detect Node.js manifests
+        id: node_manifests
+        run: |
+          package_json=$(git ls-files -- ':**/package.json')
+          if [ -n "$package_json" ]; then
+            echo "has_package=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_package=false" >> "$GITHUB_OUTPUT"
+          fi
+
+          lock_files=$(git ls-files -- ':**/package-lock.json' ':**/npm-shrinkwrap.json' ':**/yarn.lock')
+          if [ -n "$lock_files" ]; then
+            echo "has_lock=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_lock=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Set up Node.js
+        if: steps.node_manifests.outputs.has_package == 'true'
         uses: actions/setup-node@v4
         with:
           node-version: '18'
           cache: 'npm'
 
       - name: Install Node.js dependencies
-        if: ${{ hashFiles('**/package-lock.json') != '' }}
+        if: steps.node_manifests.outputs.has_lock == 'true'
         run: npm ci
 
       - name: Skip Node.js install
-        if: ${{ hashFiles('**/package-lock.json') == '' }}
-        run: echo 'No package-lock.json found. Skipping Node.js dependency installation.'
+        if: steps.node_manifests.outputs.has_package == 'true' && steps.node_manifests.outputs.has_lock != 'true'
+        run: echo 'Node.js project detected without a lockfile. Skipping npm ci.'
 
       - name: Run npm audit
-        if: ${{ hashFiles('**/package-lock.json') != '' }}
+        if: steps.node_manifests.outputs.has_lock == 'true'
         run: npm audit --production
 
       - name: Skip npm audit
-        if: ${{ hashFiles('**/package-lock.json') == '' }}
+        if: steps.node_manifests.outputs.has_lock != 'true'
         run: echo 'No Node.js lockfile found. Skipping npm audit.'
 
