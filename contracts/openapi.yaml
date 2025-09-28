@@ -146,6 +146,45 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
+  /profiles/me:
+    patch:
+      summary: Mettre à jour le profil utilisateur courant
+      description: Permet à l'utilisateur connecté de modifier les informations de son profil public. Retourne 400 si la charge utile est invalide, 401 si la session est expirée et 403 lorsque le compte est suspendu.
+      tags: [Profiles]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProfileUpdateInput'
+      responses:
+        '200':
+          description: Profil mis à jour avec succès
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Profile'
+        '400':
+          description: Données de profil invalides ou incohérentes.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Jeton d'authentification manquant ou invalide.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Accès refusé car le compte est suspendu.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
   /events:
     get:
       summary: Obtenir les événements paginés
@@ -216,6 +255,131 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+    post:
+      summary: Créer un nouvel événement
+      description: Permet à un organisateur autorisé de publier un événement. Retourne 400 si les données sont invalides, 401 si la session n'est pas valide et 403 lorsque l'utilisateur ne dispose pas des permissions nécessaires.
+      tags: [Events]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EventCreateInput'
+      responses:
+        '201':
+          description: Événement créé avec succès
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Event'
+        '400':
+          description: Données d'événement incomplètes ou invalides.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Jeton d'accès expiré ou non fourni.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Accès refusé car l'utilisateur ne dispose pas des droits pour créer un événement.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /events/{id}:
+    get:
+      summary: Obtenir le détail d'un événement
+      description: Retourne les informations complètes d'un événement spécifique. Retourne 401 si l'utilisateur n'est pas authentifié, 403 si l'accès est refusé et 404 si l'événement n'existe pas.
+      tags: [Events]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Détails de l'événement demandés
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Event'
+        '401':
+          description: Jeton d'accès expiré ou non fourni.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Accès aux événements refusé par la politique de l'organisation.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Aucun événement correspondant à l'identifiant fourni n'a été trouvé.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    patch:
+      summary: Mettre à jour un événement existant
+      description: Permet à un organisateur autorisé de modifier les détails d'un événement. Retourne 400 si les données sont invalides, 401 si la session est expirée, 403 si l'utilisateur ne possède pas les droits nécessaires et 404 si l'événement est introuvable.
+      tags: [Events]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EventUpdateInput'
+      responses:
+        '200':
+          description: Événement mis à jour
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Event'
+        '400':
+          description: Données d'événement invalides.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Jeton d'accès expiré ou non fourni.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Accès refusé car l'utilisateur ne dispose pas des droits pour modifier cet événement.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Aucun événement correspondant à l'identifiant fourni n'a été trouvé.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
 
   /events/{id}/join:
     post:
@@ -260,6 +424,39 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+    delete:
+      summary: Annuler l'inscription à un événement
+      description: Retire l'utilisateur connecté de la liste des participants à l'événement. Retourne 401 si la session est invalide, 403 si l'annulation n'est pas permise et 404 si l'événement est introuvable.
+      tags: [Events]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '204':
+          description: Désinscription effectuée avec succès
+        '401':
+          description: Jeton d'authentification manquant ou invalide.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Accès refusé car l'utilisateur ne peut pas se désinscrire de cet événement.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Aucun événement correspondant à l'identifiant fourni n'a été trouvé.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
 
   /conversations:
     get:
@@ -282,6 +479,43 @@ paths:
                       $ref: '#/components/schemas/Conversation'
         '401':
           description: Jeton d'authentification manquant ou expiré.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Accès refusé car la messagerie n'est pas disponible pour ce compte.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    post:
+      summary: Démarrer une nouvelle conversation
+      description: Crée une conversation entre l'utilisateur connecté et un autre membre. Retourne 400 si l'utilisateur ciblé est invalide, 401 lorsque la session est expirée et 403 si les deux membres ne sont pas autorisés à communiquer.
+      tags: [Messages]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConversationCreateInput'
+      responses:
+        '201':
+          description: Conversation créée
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Conversation'
+        '400':
+          description: Identifiant de participant manquant ou conversation déjà existante.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Jeton d'authentification manquant ou invalide.
           content:
             application/json:
               schema:
@@ -336,7 +570,6 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
-
     post:
       summary: Envoyer un message
       description: Envoie un nouveau message dans la conversation indiquée. Retourne 401 si l'utilisateur n'est pas authentifié, 403 lorsqu'il n'appartient pas à la conversation et 404 si la conversation n'existe pas.
@@ -375,6 +608,41 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
         '403':
           description: Accès refusé car l'utilisateur n'est pas autorisé à écrire dans cette conversation.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Conversation introuvable pour l'identifiant fourni.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /conversations/{id}/read:
+    post:
+      summary: Marquer une conversation comme lue
+      description: Réinitialise le compteur de messages non lus pour l'utilisateur connecté dans la conversation ciblée.
+      tags: [Messages]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '204':
+          description: Conversation marquée comme lue
+        '401':
+          description: Jeton d'authentification manquant ou invalide.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Accès refusé car l'utilisateur n'est pas autorisé à consulter cette conversation.
           content:
             application/json:
               schema:
@@ -433,6 +701,9 @@ components:
           type: string
         avatar_url:
           type: string
+        availability:
+          type: string
+          description: Statut de disponibilité de l'utilisateur (ex. ouvert aux opportunités).
 
     Event:
       type: object
@@ -462,6 +733,20 @@ components:
           type: boolean
         capacity:
           type: integer
+        organizer:
+          type: object
+          description: Informations sur l'organisateur de l'événement.
+          properties:
+            id:
+              type: integer
+            name:
+              type: string
+            company:
+              type: string
+        tags:
+          type: array
+          items:
+            type: string
 
     Conversation:
       type: object
@@ -499,6 +784,115 @@ components:
         timestamp:
           type: string
           format: date-time
+
+    ProfileUpdateInput:
+      type: object
+      description: Champs modifiables d'un profil utilisateur.
+      properties:
+        name:
+          type: string
+        profession:
+          type: string
+        company:
+          type: string
+        bio:
+          type: string
+        skills:
+          type: array
+          items:
+            type: string
+        location:
+          type: string
+        avatar_url:
+          type: string
+          format: uri
+        availability:
+          type: string
+      additionalProperties: false
+
+    EventCreateInput:
+      type: object
+      required: [title, description, event_date, start_time, location]
+      properties:
+        title:
+          type: string
+        description:
+          type: string
+        event_date:
+          type: string
+          format: date
+        start_time:
+          type: string
+          format: time
+        end_time:
+          type: string
+          format: time
+        location:
+          type: object
+          required: [name]
+          properties:
+            name:
+              type: string
+            address:
+              type: string
+        category:
+          type: string
+        is_free:
+          type: boolean
+        capacity:
+          type: integer
+        tags:
+          type: array
+          items:
+            type: string
+      additionalProperties: false
+
+    EventUpdateInput:
+      type: object
+      description: Champs autorisés lors de la mise à jour d'un événement. Tous les champs sont optionnels.
+      properties:
+        title:
+          type: string
+        description:
+          type: string
+        event_date:
+          type: string
+          format: date
+        start_time:
+          type: string
+          format: time
+        end_time:
+          type: string
+          format: time
+        location:
+          type: object
+          properties:
+            name:
+              type: string
+            address:
+              type: string
+        category:
+          type: string
+        is_free:
+          type: boolean
+        capacity:
+          type: integer
+        tags:
+          type: array
+          items:
+            type: string
+      additionalProperties: false
+
+    ConversationCreateInput:
+      type: object
+      required: [participant_id]
+      properties:
+        participant_id:
+          type: integer
+        initial_message:
+          type: string
+          maxLength: 1000
+      additionalProperties: false
 
     ErrorResponse:
       type: object
