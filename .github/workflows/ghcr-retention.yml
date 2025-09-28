@@ -1,0 +1,135 @@
+name: GHCR Retention
+
+on:
+  schedule:
+    - cron: '0 3 * * 0'
+  workflow_dispatch:
+
+env:
+  PACKAGE_NAME: api-gateway
+  BRANCH_BUILD_RETENTION: '30'
+
+jobs:
+  prune:
+    name: Prune stale container images
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Prune GHCR package versions
+        uses: actions/github-script@v7
+        env:
+          PACKAGE_NAME: ${{ env.PACKAGE_NAME }}
+          BRANCH_BUILD_RETENTION: ${{ env.BRANCH_BUILD_RETENTION }}
+        with:
+          github-token: ${{ secrets.GHCR_RETENTION_TOKEN || github.token }}
+          script: |
+            const core = require('@actions/core');
+            const owner = context.repo.owner;
+            let isOrg = true;
+            try {
+              await github.rest.orgs.get({ org: owner });
+            } catch (error) {
+              if (error.status === 404) {
+                isOrg = false;
+              } else {
+                throw error;
+              }
+            }
+
+            const keepCount = parseInt(process.env.BRANCH_BUILD_RETENTION, 10) || 30;
+            const packageName = process.env.PACKAGE_NAME;
+            const packageType = 'container';
+
+            const listParams = {
+              package_type: packageType,
+              package_name: packageName,
+              per_page: 100
+            };
+            if (isOrg) {
+              listParams.org = owner;
+            } else {
+              listParams.username = owner;
+            }
+
+            const listFn = isOrg
+              ? github.rest.packages.getAllPackageVersionsForPackageOwnedByOrg
+              : github.rest.packages.getAllPackageVersionsForPackageOwnedByUser;
+
+            const versions = await github.paginate(listFn, listParams);
+
+            const branchPattern = /^[a-z0-9_.-]+-[0-9a-f]{7}$/;
+            const protectedIds = new Set();
+            const branchVersions = [];
+            const orphanIds = new Set();
+
+            for (const version of versions) {
+              const tags = version.metadata?.container?.tags ?? [];
+              if (tags.length === 0) {
+                orphanIds.add(version.id);
+                continue;
+              }
+
+              let hasBranchTag = false;
+              let hasProtectedTag = false;
+              for (const tag of tags) {
+                if (branchPattern.test(tag)) {
+                  hasBranchTag = true;
+                } else {
+                  hasProtectedTag = true;
+                }
+              }
+
+              if (hasProtectedTag) {
+                protectedIds.add(version.id);
+              }
+              if (hasBranchTag) {
+                branchVersions.push(version);
+              }
+            }
+
+            branchVersions.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+
+            const deletions = new Map();
+
+            for (let index = keepCount; index < branchVersions.length; index += 1) {
+              const version = branchVersions[index];
+              if (!protectedIds.has(version.id)) {
+                deletions.set(version.id, version);
+              }
+            }
+
+            for (const orphanId of orphanIds) {
+              if (!protectedIds.has(orphanId)) {
+                const version = versions.find((v) => v.id === orphanId);
+                if (version) {
+                  deletions.set(orphanId, version);
+                }
+              }
+            }
+
+            if (deletions.size === 0) {
+              core.info('No container versions needed pruning.');
+              return;
+            }
+
+            const deleteFn = isOrg
+              ? github.rest.packages.deletePackageVersionForOrg
+              : github.rest.packages.deletePackageVersionForUser;
+
+            for (const version of deletions.values()) {
+              const params = {
+                package_type: packageType,
+                package_name: packageName,
+                package_version_id: version.id
+              };
+              if (isOrg) {
+                params.org = owner;
+              } else {
+                params.username = owner;
+              }
+
+              await deleteFn(params);
+              core.info(`Deleted package version ${version.id} (${version.created_at})`);
+            }

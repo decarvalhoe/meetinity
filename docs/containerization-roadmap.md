@@ -28,7 +28,7 @@ Cette feuille de route détaille les actions nécessaires pour livrer la premiè
   5. Documenter la procédure de publication et de purge.
 - **Livrables** :
   - Registre opérationnel + secrets CI/CD configurés.
-  - Politique de tagging et rétention décrite dans la documentation d'infra.
+  - Politique de tagging et rétention décrite dans la documentation d'infra (`docs/container-registry.md`).
 
 ## 3. Déployer un cluster Kubernetes avec configuration réseau et stockage
 - **Objectifs** :

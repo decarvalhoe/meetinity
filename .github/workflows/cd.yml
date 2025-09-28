@@ -8,6 +8,8 @@ on:
 env:
   IMAGE_NAME: api-gateway
   CHART_PATH: infra/helm/api-gateway
+  REGISTRY: ghcr.io
+  RELEASE_ENV_FALLBACK: production
 
 jobs:
   deploy:
@@ -15,6 +17,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+      packages: write
       id-token: write
     steps:
       - name: Checkout repository
@@ -28,26 +31,65 @@ jobs:
           aws-region: ${{ secrets.AWS_REGION }}
           mask-aws-account-id: true
 
-      - name: Log in to Amazon ECR
-        id: login-ecr
-        uses: aws-actions/amazon-ecr-login@v2
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Extract branch name
-        id: source
-        run: echo "branch=${GITHUB_REF##*/}" >> "$GITHUB_OUTPUT"
+      - name: Derive registry scope
+        id: registry
+        run: |
+          owner="${GITHUB_REPOSITORY_OWNER,,}"
+          echo "owner=$owner" >> "$GITHUB_OUTPUT"
+          echo "REGISTRY_OWNER=$owner" >> "$GITHUB_ENV"
+
+      - name: Set image tagging metadata
+        run: |
+          short_sha="${GITHUB_SHA::7}"
+          branch="${GITHUB_REF_NAME}"
+          branch=${branch//\//-}
+          branch=$(echo "$branch" | tr '[:upper:]' '[:lower:]')
+          branch=$(echo "$branch" | sed 's/[^a-z0-9_.-]/-/g')
+          chart_file="${{ env.CHART_PATH }}/Chart.yaml"
+          app_version=$(grep '^appVersion:' "$chart_file" | head -n1 | awk '{print $2}' | tr -d '"')
+          if [ -z "$app_version" ]; then
+            app_version=$(grep '^version:' "$chart_file" | head -n1 | awk '{print $2}' | tr -d '"')
+          fi
+          if [ -z "$app_version" ]; then
+            echo "Unable to determine app version from $chart_file" >&2
+            exit 1
+          fi
+
+          release_env="${{ secrets.RELEASE_ENVIRONMENT }}"
+          if [ -z "$release_env" ]; then
+            release_env="${{ env.RELEASE_ENV_FALLBACK }}"
+          fi
+          release_env=$(echo "$release_env" | tr '[:upper:]' '[:lower:]')
+          release_env=$(echo "$release_env" | sed 's/[^a-z0-9_.-]/-/g')
+
+          echo "SHORT_SHA=$short_sha" >> "$GITHUB_ENV"
+          echo "BRANCH_NAME=$branch" >> "$GITHUB_ENV"
+          echo "APP_VERSION=$app_version" >> "$GITHUB_ENV"
+          echo "RELEASE_ENV=$release_env" >> "$GITHUB_ENV"
+          image_uri="${{ env.REGISTRY }}/${REGISTRY_OWNER}/${{ env.IMAGE_NAME }}"
+          echo "IMAGE_URI=$image_uri" >> "$GITHUB_ENV"
 
       - name: Build Docker image
         run: |
           docker build \
             --build-arg GIT_SHA=${GITHUB_SHA} \
-            --tag ${{ secrets.ECR_REGISTRY }}/${{ env.IMAGE_NAME }}:${GITHUB_SHA} \
-            --tag ${{ secrets.ECR_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.source.outputs.branch }} \
+            --tag ${IMAGE_URI}:${BRANCH_NAME}-${SHORT_SHA} \
+            --tag ${IMAGE_URI}:${RELEASE_ENV}-release \
+            --tag ${IMAGE_URI}:${APP_VERSION} \
             .
 
       - name: Push Docker image
         run: |
-          docker push ${{ secrets.ECR_REGISTRY }}/${{ env.IMAGE_NAME }}:${GITHUB_SHA}
-          docker push ${{ secrets.ECR_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.source.outputs.branch }}
+          docker push ${IMAGE_URI}:${BRANCH_NAME}-${SHORT_SHA}
+          docker push ${IMAGE_URI}:${RELEASE_ENV}-release
+          docker push ${IMAGE_URI}:${APP_VERSION}
 
       - name: Update kubeconfig for cluster
         id: update_kubeconfig
@@ -62,17 +104,17 @@ jobs:
 
       - name: Create or update Docker registry secret
         run: |
-          kubectl create secret docker-registry ecr-pull-secret \
+          kubectl create secret docker-registry ghcr-pull-secret \
             --namespace ${{ secrets.K8S_NAMESPACE }} \
-            --docker-server=${{ secrets.ECR_REGISTRY }} \
-            --docker-username=AWS \
-            --docker-password=$(aws ecr get-login-password --region ${{ secrets.AWS_REGION }}) \
+            --docker-server=${{ env.REGISTRY }} \
+            --docker-username=${{ secrets.GHCR_READER_USERNAME }} \
+            --docker-password=${{ secrets.GHCR_READER_TOKEN }} \
             --dry-run=client -o yaml | kubectl apply -f -
 
       - name: Helm upgrade
         run: |
           helm upgrade --install meetinity ${{ env.CHART_PATH }} \
             --namespace ${{ secrets.K8S_NAMESPACE }} \
-            --set image.repository=${{ secrets.ECR_REGISTRY }}/${{ env.IMAGE_NAME }} \
-            --set image.tag=${GITHUB_SHA} \
-            --set imagePullSecrets[0].name=ecr-pull-secret
+            --set image.repository=${IMAGE_URI} \
+            --set image.tag=${BRANCH_NAME}-${SHORT_SHA} \
+            --set imagePullSecrets[0].name=ghcr-pull-secret
