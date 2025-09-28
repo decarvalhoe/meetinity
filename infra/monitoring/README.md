@@ -27,7 +27,15 @@ This folder contains the configuration used to deploy the Meetinity monitoring t
      -f infra/monitoring/prometheus/values.yaml
    ```
 
-3. Configure Grafana (optional override separate release). Update the ingress host in `grafana/values.yaml` before deploying:
+3. Deploy the Prometheus Adapter to expose custom metrics (HTTP throughput, domain events, profile sync rate) for HPAs:
+
+   ```bash
+   helm upgrade --install monitoring-adapter prometheus-community/prometheus-adapter \
+     --namespace monitoring \
+     -f infra/monitoring/prometheus-adapter/values.yaml
+   ```
+
+4. Configure Grafana (optional override separate release). Update the ingress host in `grafana/values.yaml` before deploying:
 
    ```bash
    helm upgrade --install grafana grafana/grafana \
@@ -35,7 +43,7 @@ This folder contains the configuration used to deploy the Meetinity monitoring t
      -f infra/monitoring/grafana/values.yaml
    ```
 
-4. Apply Alertmanager rules if not managed by Helm:
+5. Apply Alertmanager rules if not managed by Helm:
 
    ```bash
    kubectl apply -n monitoring -f infra/monitoring/alertmanager/config.yaml
@@ -46,5 +54,6 @@ This folder contains the configuration used to deploy the Meetinity monitoring t
 ## Operations
 
 - Use `kubectl port-forward svc/monitoring-grafana 3000:80 -n monitoring` for local access.
+- The Prometheus Adapter publishes CPU/memory resources plus service-specific custom metrics used by HPAs (see `infra/monitoring/prometheus-adapter/values.yaml`).
 - Alertmanager routes to Slack (example webhook) and email by default; update secrets referenced in the config before deploying.
 - ServiceMonitor and PodMonitor objects can be created per microservice to collect metrics automatically.

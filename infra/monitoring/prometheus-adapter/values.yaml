@@ -1,0 +1,80 @@
+replicaCount: 2
+logLevel: info
+metricsRelistInterval: 30s
+prometheus:
+  url: http://monitoring-kube-prometheus-prometheus.monitoring.svc
+  port: 9090
+  path: /prometheus
+resources:
+  requests:
+    cpu: 150m
+    memory: 256Mi
+  limits:
+    cpu: 400m
+    memory: 512Mi
+rules:
+  default: false
+  resource:
+    cpu:
+      containerQuery: sum(rate(container_cpu_usage_seconds_total{<<.LabelMatchers>>,container!="",image!=""}[3m])) by (<<.GroupBy>>)
+      nodeQuery: sum(rate(container_cpu_usage_seconds_total{<<.LabelMatchers>>,container="",image!=""}[3m])) by (<<.GroupBy>>)
+      resources:
+        overrides:
+          node:
+            resource: node
+          namespace:
+            resource: namespace
+          pod:
+            resource: pod
+    memory:
+      containerQuery: sum(container_memory_working_set_bytes{<<.LabelMatchers>>,container!="",image!=""}) by (<<.GroupBy>>)
+      nodeQuery: sum(container_memory_working_set_bytes{<<.LabelMatchers>>,container="",image!=""}) by (<<.GroupBy>>)
+      resources:
+        overrides:
+          node:
+            resource: node
+          namespace:
+            resource: namespace
+          pod:
+            resource: pod
+  custom:
+    - seriesQuery: 'http_requests_total{service="api-gateway",kubernetes_namespace!="",kubernetes_pod_name!=""}'
+      resources:
+        overrides:
+          kubernetes_namespace:
+            resource: namespace
+          kubernetes_pod_name:
+            resource: pod
+      name:
+        as: http_requests_per_second
+      metricsQuery: sum(rate(<<.Series>>{<<.LabelMatchers>>}[2m])) by (<<.GroupBy>>)
+    - seriesQuery: 'events_processed_total{service="event-service",kubernetes_namespace!="",kubernetes_pod_name!=""}'
+      resources:
+        overrides:
+          kubernetes_namespace:
+            resource: namespace
+          kubernetes_pod_name:
+            resource: pod
+      name:
+        as: events_processed_per_second
+      metricsQuery: sum(rate(<<.Series>>{<<.LabelMatchers>>}[2m])) by (<<.GroupBy>>)
+    - seriesQuery: 'matches_computed_total{service="matching-service",kubernetes_namespace!="",kubernetes_pod_name!=""}'
+      resources:
+        overrides:
+          kubernetes_namespace:
+            resource: namespace
+          kubernetes_pod_name:
+            resource: pod
+      name:
+        as: matches_computed_per_second
+      metricsQuery: sum(rate(<<.Series>>{<<.LabelMatchers>>}[2m])) by (<<.GroupBy>>)
+    - seriesQuery: 'user_profile_sync_total{service="user-service",kubernetes_namespace!="",kubernetes_pod_name!=""}'
+      resources:
+        overrides:
+          kubernetes_namespace:
+            resource: namespace
+          kubernetes_pod_name:
+            resource: pod
+      name:
+        as: user_profile_sync_per_second
+      metricsQuery: sum(rate(<<.Series>>{<<.LabelMatchers>>}[2m])) by (<<.GroupBy>>)
