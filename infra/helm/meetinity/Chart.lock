@@ -1,0 +1,18 @@
+dependencies:
+- name: common
+  repository: file://charts/common
+  version: 0.1.0
+- name: api-gateway
+  repository: file://charts/api-gateway
+  version: 0.1.0
+- name: event-service
+  repository: file://charts/event-service
+  version: 0.1.0
+- name: matching-service
+  repository: file://charts/matching-service
+  version: 0.1.0
+- name: user-service
+  repository: file://charts/user-service
+  version: 0.1.0
+digest: sha256:e7dedce19e918179ac6038c043000249604729e8b41e02d3745ba92d47c8bb78
+generated: "2025-09-28T20:42:16.258157907Z"

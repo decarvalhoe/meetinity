@@ -1,0 +1,9 @@
+{{- if .Values.shared.configMaps }}
+{{- $root := . }}
+{{- range $name, $config := .Values.shared.configMaps }}
+{{- $baseLabels := (include "meetinity.labels" $root | fromYaml) }}
+{{- $labels := merge (dict) $baseLabels ($config.labels | default (dict)) }}
+{{ include "common.configmap" (dict "name" (printf "%s-%s" (include "meetinity.fullname" $root) $name) "labels" $labels "annotations" ($config.annotations | default (dict)) "data" ($config.data | default (dict)) "binaryData" ($config.binaryData | default (dict))) }}
+---
+{{- end }}
+{{- end }}

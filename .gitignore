@@ -1,0 +1,3 @@
+# Helm dependency archives
+infra/helm/meetinity/charts/*.tgz
+infra/helm/meetinity/charts/*/charts/*.tgz

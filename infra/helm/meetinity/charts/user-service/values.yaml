@@ -50,6 +50,10 @@ env:
         name: user-service-db
         key: url
 
+configMaps: []
+sealedSecrets: []
+vaultSecrets: []
+
 livenessProbe:
   path: /healthz
   port: http

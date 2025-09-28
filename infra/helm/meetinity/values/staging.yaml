@@ -1,0 +1,79 @@
+global:
+  domain: staging.meetinity.com
+  secretStores:
+    default:
+      name: vault-staging
+      kind: ClusterSecretStore
+
+shared:
+  configMaps:
+    platform-settings:
+      data:
+        FEATURE_FLAGS: "true"
+        DEFAULT_TIMEZONE: "UTC"
+  sealedSecrets:
+    - name: platform-tls
+      encryptedData:
+        tls.crt: PLACEHOLDER_STAGING_CERT
+        tls.key: PLACEHOLDER_STAGING_KEY
+
+api-gateway:
+  environment: staging
+  domain: staging.meetinity.com
+  image:
+    tag: staging
+  ingress:
+    tlsSecretName: api-gateway-staging-tls
+  vaultSecrets:
+    - name: api-gateway-env
+      path: kv/data/staging/api-gateway/app
+      secretStoreRef:
+        name: vault-staging
+      target:
+        template:
+          type: Opaque
+          data:
+            DATABASE_URL: '{{ .data.database_url }}'
+            REDIS_URL: '{{ .data.redis_url }}'
+
+user-service:
+  environment: staging
+  domain: staging.meetinity.com
+  vaultSecrets:
+    - name: user-service-db
+      path: kv/data/staging/user-service/database
+      secretStoreRef:
+        name: vault-staging
+      target:
+        template:
+          type: Opaque
+          data:
+            url: '{{ .data.url }}'
+
+matching-service:
+  environment: staging
+  domain: staging.meetinity.com
+  vaultSecrets:
+    - name: matching-service-env
+      path: kv/data/staging/matching-service/app
+      secretStoreRef:
+        name: vault-staging
+      target:
+        template:
+          type: Opaque
+          data:
+            MATCHING_THRESHOLD: '{{ .data.matching_threshold | default "0.8" }}'
+
+event-service:
+  environment: staging
+  domain: staging.meetinity.com
+  vaultSecrets:
+    - name: event-service-env
+      path: kv/data/staging/event-service/app
+      secretStoreRef:
+        name: vault-staging
+      target:
+        template:
+          type: Opaque
+          data:
+            EVENT_CATALOG_URL: '{{ .data.catalog_url }}'

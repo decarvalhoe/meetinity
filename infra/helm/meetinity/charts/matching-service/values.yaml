@@ -1,10 +1,10 @@
 environment: dev
 domain: meetinity.com
 
-replicaCount: 2
+replicaCount: 1
 
 image:
-  repository: ghcr.io/meetinity/event-service
+  repository: ghcr.io/meetinity/matching-service
   tag: "latest"
   pullPolicy: IfNotPresent
 
@@ -14,24 +14,24 @@ serviceAccount:
 
 service:
   type: ClusterIP
-  port: 5002
+  port: 5001
 
 ingress:
   enabled: true
   className: nginx
   annotations: {}
-  subdomain: events
-  tlsSecretName: event-service-tls
+  subdomain: matching
+  tlsSecretName: matching-service-tls
   paths:
     - path: /
       pathType: Prefix
 
 autoscaling:
   enabled: true
-  minReplicas: 2
-  maxReplicas: 5
-  targetCPUUtilizationPercentage: 65
-  targetMemoryUtilizationPercentage: 75
+  minReplicas: 1
+  maxReplicas: 4
+  targetCPUUtilizationPercentage: 60
+  targetMemoryUtilizationPercentage: 70
 
 resources:
   requests:
@@ -44,8 +44,12 @@ resources:
 env:
   - name: FLASK_ENV
     value: production
-  - name: EVENT_CATALOG_URL
-    value: https://catalog.meetinity.internal
+  - name: MATCHING_STRATEGY
+    value: interest-based
+
+configMaps: []
+sealedSecrets: []
+vaultSecrets: []
 
 livenessProbe:
   path: /healthz

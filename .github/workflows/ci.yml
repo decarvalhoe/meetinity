@@ -159,3 +159,45 @@ jobs:
         if: steps.node_manifests.outputs.has_lock != 'true'
         run: echo 'No Node.js lockfile found. Skipping npm audit.'
 
+  helm:
+    name: Helm validation
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v3
+        with:
+          version: v3.14.2
+
+      - name: Build Helm dependencies
+        run: |
+          helm dependency update infra/helm/meetinity
+          for chart in infra/helm/meetinity/charts/*; do
+            if [ -d "$chart" ] && [ -f "$chart/Chart.yaml" ]; then
+              helm dependency update "$chart" || true
+            fi
+          done
+
+      - name: Lint Helm charts
+        run: |
+          helm lint infra/helm/meetinity
+          for chart in infra/helm/meetinity/charts/*; do
+            if [ -d "$chart" ] && [ -f "$chart/Chart.yaml" ]; then
+              helm lint "$chart"
+            fi
+          done
+
+      - name: Render default manifests
+        run: helm template meetinity infra/helm/meetinity --values infra/helm/meetinity/values.yaml
+
+      - name: Render dev manifests
+        run: helm template meetinity infra/helm/meetinity --values infra/helm/meetinity/values.yaml --values infra/helm/meetinity/values/dev.yaml
+
+      - name: Render staging manifests
+        run: helm template meetinity infra/helm/meetinity --values infra/helm/meetinity/values.yaml --values infra/helm/meetinity/values/staging.yaml
+
+      - name: Render prod manifests
+        run: helm template meetinity infra/helm/meetinity --values infra/helm/meetinity/values.yaml --values infra/helm/meetinity/values/prod.yaml

@@ -1,30 +1,49 @@
 # Meetinity Helm Charts
 
-This directory contains self-contained Helm charts for Meetinity microservices.
+This directory contains the umbrella chart used to deploy the Meetinity platform. The `meetinity` chart bundles service subcharts and provides shared templates for configuration, secrets, and HTTP probes.
 
-## Charts
+## Structure
 
-- `api-gateway`
-- `user-service`
-- `matching-service`
-- `event-service`
+```
+infra/helm/
+└── meetinity/
+    ├── Chart.yaml
+    ├── values.yaml
+    ├── values/
+    │   ├── dev.yaml
+    │   ├── staging.yaml
+    │   └── prod.yaml
+    └── charts/
+        ├── common/          # Library chart exposing shared templates
+        ├── api-gateway/
+        ├── user-service/
+        ├── matching-service/
+        └── event-service/
+```
 
-Each chart expects the following values when installed:
-
-- `environment`: deployment stage (dev, staging, prod). Used to build ingress hostnames.
-- `domain`: top-level domain appended to ingress hosts.
-- `image.repository` / `image.tag`: container image configuration.
-- `env`: list of environment variables propagated to the workload.
+- `charts/common` defines reusable templates for ConfigMaps, Secrets, SealedSecrets, ExternalSecrets, and HTTP probe snippets.
+- Each service chart (`api-gateway`, `user-service`, `matching-service`, `event-service`) renders Deployments, Services, HPAs, and Ingress resources while consuming the shared templates.
+- The top-level `values.yaml` captures global defaults. Environment-specific overrides live under `values/` and demonstrate how to integrate Vault-backed `ExternalSecret` resources and Bitnami `SealedSecret` manifests.
 
 ## Usage
 
-Deploy a chart with:
+Render the entire stack for a target environment:
 
 ```bash
-helm upgrade --install api-gateway infra/helm/api-gateway \
-  --namespace default \
-  --set environment=dev \
-  --set domain=meetinity.com
+helm dependency update infra/helm/meetinity
+helm template meetinity infra/helm/meetinity \
+  --values infra/helm/meetinity/values.yaml \
+  --values infra/helm/meetinity/values/dev.yaml
 ```
 
-Override `values.yaml` as necessary for production (e.g. resource limits, ingress annotations).
+Install into a Kubernetes cluster:
+
+```bash
+helm upgrade --install meetinity infra/helm/meetinity \
+  --namespace meetinity \
+  --create-namespace \
+  --values infra/helm/meetinity/values.yaml \
+  --values infra/helm/meetinity/values/prod.yaml
+```
+
+Subchart values can be overridden by targeting their keys (e.g. `--set api-gateway.image.tag=v1.2.3`).

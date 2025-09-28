@@ -1,0 +1,22 @@
+apiVersion: v2
+name: meetinity
+description: Umbrella chart deploying the Meetinity platform services.
+type: application
+version: 0.1.0
+appVersion: "1.0.0"
+dependencies:
+  - name: common
+    version: 0.1.0
+    repository: "file://charts/common"
+  - name: api-gateway
+    version: 0.1.0
+    repository: "file://charts/api-gateway"
+  - name: event-service
+    version: 0.1.0
+    repository: "file://charts/event-service"
+  - name: matching-service
+    version: 0.1.0
+    repository: "file://charts/matching-service"
+  - name: user-service
+    version: 0.1.0
+    repository: "file://charts/user-service"

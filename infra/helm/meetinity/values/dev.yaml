@@ -1,0 +1,90 @@
+global:
+  domain: dev.meetinity.internal
+  secretStores:
+    default:
+      name: vault-dev
+      kind: ClusterSecretStore
+
+shared:
+  configMaps:
+    platform-settings:
+      data:
+        FEATURE_FLAGS: "true"
+        DEFAULT_TIMEZONE: "UTC"
+  vaultSecrets:
+    - name: platform-database
+      path: kv/data/dev/platform/database
+      secretStoreRef:
+        name: vault-dev
+        kind: ClusterSecretStore
+      target:
+        template:
+          type: Opaque
+          data:
+            DATABASE_URL: '{{ .data.database_url }}'
+
+api-gateway:
+  environment: dev
+  domain: dev.meetinity.internal
+  image:
+    tag: dev
+  ingress:
+    tlsSecretName: api-gateway-dev-tls
+  vaultSecrets:
+    - name: api-gateway-env
+      path: kv/data/dev/api-gateway/app
+      secretStoreRef:
+        name: vault-dev
+      target:
+        template:
+          type: Opaque
+          data:
+            DATABASE_URL: '{{ .data.database_url }}'
+            LOG_LEVEL: '{{ .data.log_level | default "info" }}'
+  sealedSecrets:
+    - name: api-gateway-tls
+      encryptedData:
+        tls.crt: PLACEHOLDER_DEV_CERT
+        tls.key: PLACEHOLDER_DEV_KEY
+
+user-service:
+  environment: dev
+  domain: dev.meetinity.internal
+  vaultSecrets:
+    - name: user-service-db
+      path: kv/data/dev/user-service/database
+      secretStoreRef:
+        name: vault-dev
+      target:
+        template:
+          type: Opaque
+          data:
+            url: '{{ .data.url }}'
+
+matching-service:
+  environment: dev
+  domain: dev.meetinity.internal
+  vaultSecrets:
+    - name: matching-service-env
+      path: kv/data/dev/matching-service/app
+      secretStoreRef:
+        name: vault-dev
+      target:
+        template:
+          type: Opaque
+          data:
+            MATCHING_THRESHOLD: '{{ .data.matching_threshold | default "0.75" }}'
+
+event-service:
+  environment: dev
+  domain: dev.meetinity.internal
+  vaultSecrets:
+    - name: event-service-env
+      path: kv/data/dev/event-service/app
+      secretStoreRef:
+        name: vault-dev
+      target:
+        template:
+          type: Opaque
+          data:
+            EVENT_CATALOG_URL: '{{ .data.catalog_url }}'
