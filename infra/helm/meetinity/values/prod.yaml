@@ -5,6 +5,13 @@ global:
     default:
       name: vault-prod
       kind: ClusterSecretStore
+      spec:
+        provider:
+          vault:
+            server: https://vault.meetinity.com
+            auth:
+              kubernetes:
+                role: meetinity-prod
 
 shared:
   configMaps:
@@ -12,11 +19,28 @@ shared:
       data:
         FEATURE_FLAGS: "false"
         DEFAULT_TIMEZONE: "UTC"
-  sealedSecrets:
+  vaultSecrets:
+    - name: shared-database
+      path: "kv/data/{{ .Values.global.environment }}/shared/database"
+      target:
+        name: meetinity-shared-database
+        creationPolicy: Owner
+        template:
+          type: Opaque
+    - name: shared-redis
+      path: "kv/data/{{ .Values.global.environment }}/shared/redis"
+      target:
+        name: meetinity-shared-redis
+        creationPolicy: Owner
+        template:
+          type: Opaque
     - name: platform-tls
-      encryptedData:
-        tls.crt: PLACEHOLDER_PROD_CERT
-        tls.key: PLACEHOLDER_PROD_KEY
+      path: "kv/data/{{ .Values.global.environment }}/shared/tls/platform"
+      target:
+        name: platform-tls
+        creationPolicy: Owner
+        template:
+          type: kubernetes.io/tls
 
 api-gateway:
   environment: prod
@@ -72,6 +96,14 @@ api-gateway:
   env:
     - name: LOG_LEVEL
       value: warn
+  vaultSecrets:
+    - name: api-gateway-tls
+      path: "kv/data/prod/ingress/api-gateway"
+      target:
+        name: api-gateway-prod-tls
+        creationPolicy: Owner
+        template:
+          type: kubernetes.io/tls
 
 user-service:
   environment: prod

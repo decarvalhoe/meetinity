@@ -5,8 +5,23 @@ global:
     default:
       name: meetinity-vault
       kind: ClusterSecretStore
+      spec:
+        provider:
+          vault:
+            server: https://vault.{{ .Values.global.environment | default "shared" }}.meetinity.com
+            path: kv
+            version: v2
+            namespace: ""
+            caBundle: ""
+            auth:
+              kubernetes:
+                mountPath: kubernetes
+                role: meetinity-{{ .Values.global.environment | default "shared" }}
+                serviceAccountRef:
+                  name: external-secrets
+                  namespace: security
   database:
-    secretName: ""
+    secretName: meetinity-shared-database
     secretKeys:
       host: host
       readerHost: reader_host
@@ -17,7 +32,7 @@ global:
       url: url
       readerUrl: reader_url
   redis:
-    secretName: ""
+    secretName: meetinity-shared-redis
     secretKeys:
       host: host
       readerHost: reader_host
@@ -75,4 +90,18 @@ shared:
         FEATURE_FLAGS: "false"
         DEFAULT_TIMEZONE: "UTC"
   sealedSecrets: []
-  vaultSecrets: []
+  vaultSecrets:
+    - name: shared-database
+      path: "kv/data/{{ .Values.global.environment }}/shared/database"
+      target:
+        name: meetinity-shared-database
+        creationPolicy: Owner
+        template:
+          type: Opaque
+    - name: shared-redis
+      path: "kv/data/{{ .Values.global.environment }}/shared/redis"
+      target:
+        name: meetinity-shared-redis
+        creationPolicy: Owner
+        template:
+          type: Opaque

@@ -151,6 +151,22 @@ resource "kubernetes_namespace" "ingress" {
 locals {
   cluster_issuer_name        = "selfsigned-cluster-issuer"
   ingress_default_tls_secret = var.default_tls_secret_name
+  ingress_service_tag        = "${kubernetes_namespace.ingress.metadata[0].name}/ingress-nginx-controller"
+  waf_name_override          = trimspace(try(var.waf_config.name, ""))
+  waf_name                   = local.waf_name_override != "" ? local.waf_name_override : "${var.environment}-ingress-waf"
+  waf_scope                  = try(var.waf_config.scope, "REGIONAL")
+  waf_rate_limit             = var.waf_config.rate_limit
+  waf_sampled_requests       = try(var.waf_config.sampled_requests_enabled, true)
+  waf_enabled                = try(var.waf_config.enabled, false)
+  shield_enabled             = try(var.shield_protection.enabled, false)
+}
+
+data "aws_lb" "ingress_controller" {
+  tags = {
+    "kubernetes.io/service-name" = local.ingress_service_tag
+  }
+
+  depends_on = [helm_release.ingress_nginx]
 }
 
 resource "helm_release" "cert_manager" {
@@ -224,6 +240,91 @@ resource "helm_release" "ingress_nginx" {
   }
 
   depends_on = [kubernetes_manifest.default_tls_certificate]
+}
+
+resource "aws_wafv2_web_acl" "ingress" {
+  count = local.waf_enabled ? 1 : 0
+
+  name        = local.waf_name
+  description = "Ingress protection for the Meetinity edge."
+  scope       = local.waf_scope
+
+  default_action {
+    allow {}
+  }
+
+  visibility_config {
+    cloudwatch_metrics_enabled = true
+    metric_name                = "${replace(local.waf_name, "-", "_")}-default"
+    sampled_requests_enabled   = local.waf_sampled_requests
+  }
+
+  rule {
+    name     = "RateLimit"
+    priority = 0
+
+    action {
+      block {}
+    }
+
+    statement {
+      rate_based_statement {
+        aggregate_key_type = "IP"
+        limit              = local.waf_rate_limit
+      }
+    }
+
+    visibility_config {
+      cloudwatch_metrics_enabled = true
+      metric_name                = "${replace(local.waf_name, "-", "_")}-ratelimit"
+      sampled_requests_enabled   = local.waf_sampled_requests
+    }
+  }
+
+  dynamic "rule" {
+    for_each = try(var.waf_config.managed_rule_groups, [])
+
+    content {
+      name     = rule.value.name
+      priority = rule.value.priority
+
+      statement {
+        managed_rule_group_statement {
+          name        = rule.value.name
+          vendor_name = try(rule.value.vendor, "AWS")
+          version     = try(rule.value.version, null)
+        }
+      }
+
+      override_action {
+        none {}
+      }
+
+      visibility_config {
+        cloudwatch_metrics_enabled = true
+        metric_name                = regexreplace("${replace(local.waf_name, "-", "_")}-${lower(rule.value.name)}", "[^A-Za-z0-9_-]", "-")
+        sampled_requests_enabled   = local.waf_sampled_requests
+      }
+    }
+  }
+
+  tags = local.default_tags
+}
+
+resource "aws_wafv2_web_acl_association" "ingress" {
+  count = local.waf_enabled ? 1 : 0
+
+  resource_arn = data.aws_lb.ingress_controller.arn
+  web_acl_arn  = aws_wafv2_web_acl.ingress[0].arn
+}
+
+resource "aws_shield_protection" "ingress" {
+  count = local.shield_enabled ? 1 : 0
+
+  name         = "${var.environment}-ingress"
+  resource_arn = data.aws_lb.ingress_controller.arn
+
+  health_check_ids = try(var.shield_protection.health_check_ids, [])
 }
 
 resource "kubernetes_storage_class" "gp3" {

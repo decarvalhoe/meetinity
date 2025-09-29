@@ -182,3 +182,48 @@ variable "redis_config" {
     auto_minor_version_upgrade = true
   }
 }
+
+variable "waf_config" {
+  description = "Configuration for the AWS WAF web ACL protecting the ingress load balancer."
+  type = object({
+    enabled             = bool
+    name                = optional(string)
+    scope               = optional(string)
+    rate_limit          = number
+    managed_rule_groups = optional(list(object({
+      name     = string
+      priority = number
+      vendor   = optional(string)
+      version  = optional(string)
+    })), [])
+    sampled_requests_enabled = optional(bool)
+  })
+  default = {
+    enabled    = true
+    rate_limit = 2000
+    managed_rule_groups = [
+      {
+        name     = "AWSManagedRulesCommonRuleSet"
+        priority = 1
+        vendor   = "AWS"
+      },
+      {
+        name     = "AWSManagedRulesKnownBadInputsRuleSet"
+        priority = 2
+        vendor   = "AWS"
+      }
+    ]
+  }
+}
+
+variable "shield_protection" {
+  description = "Configuration for AWS Shield Advanced protection applied to the ingress load balancer."
+  type = object({
+    enabled          = bool
+    health_check_ids = optional(list(string), [])
+  })
+  default = {
+    enabled          = true
+    health_check_ids = []
+  }
+}
