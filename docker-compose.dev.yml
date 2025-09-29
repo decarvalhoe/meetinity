@@ -167,10 +167,10 @@ services:
       FLASK_RUN_HOST: 0.0.0.0
       FLASK_RUN_PORT: 8080
       FLASK_DEBUG: "1"
-      DATABASE_URI: sqlite:////tmp/matching.db
+      DATABASE_URI: postgresql+psycopg://${POSTGRES_USER:-meetinity}:${POSTGRES_PASSWORD:-meetinity}@postgres:5432/${POSTGRES_DB:-meetinity}?options=-csearch_path%3Dmatching
       PYTHONUNBUFFERED: "1"
     command: >
-      sh -c "flask run --debug --host=0.0.0.0 --port 8080"
+      sh -c "alembic upgrade head && flask run --debug --host=0.0.0.0 --port 8080"
     volumes:
       - ./services/matching-service:/app
     networks:
