@@ -1,20 +1,15 @@
 # syntax=docker/dockerfile:1.4
 
-ARG PYTHON_VERSION=3.11-slim
-
 #############################
 # Builder image
 #############################
-FROM python:${PYTHON_VERSION} AS builder
+FROM python:3.11-slim AS builder
 
-ENV PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1 \
-    PIP_NO_CACHE_DIR=1
+ENV PIP_NO_CACHE_DIR=1 \
+    PYTHONUNBUFFERED=1
 
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends \
-        build-essential \
-        gcc \
+    && apt-get install -y --no-install-recommends build-essential gcc \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
@@ -23,17 +18,15 @@ COPY requirements.txt ./
 RUN python -m venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
 
-RUN --mount=type=cache,target=/root/.cache/pip \
-    pip install --upgrade pip setuptools wheel \
+RUN pip install --upgrade pip setuptools wheel \
     && pip install --no-cache-dir -r requirements.txt
 
 #############################
 # Runtime image
 #############################
-FROM python:${PYTHON_VERSION} AS runtime
+FROM python:3.11-slim AS runtime
 
-ENV PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1 \
+ENV PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1 \
     PATH="/opt/venv/bin:$PATH" \
     PYTHONPATH=/app

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Callable, Iterable
+from typing import Any, Callable, Iterable
 
 from sqlalchemy.orm import Session
 
@@ -14,27 +14,19 @@ from .sessions import UserSessionRepository
 from .users import UserCoreRepository
 from .verifications import UserVerificationRepository
 
-if TYPE_CHECKING:  # pragma: no cover - typing helper
-    from src.services.cache import CacheHooks
-
 
 class UserRepository:
     """Facade exposing all user related repository methods."""
 
-    def __init__(
-        self,
-        session: Session,
-        *,
-        cache_hooks: "CacheHooks | None" = None,
-    ) -> None:
+    def __init__(self, session: Session) -> None:
         self.session = session
         self._repositories: Iterable[object] = (
-            UserCoreRepository(session, cache_hooks=cache_hooks),
-            UserPreferenceRepository(session, cache_hooks=cache_hooks),
-            UserActivityRepository(session, cache_hooks=cache_hooks),
-            UserConnectionRepository(session, cache_hooks=cache_hooks),
-            UserSessionRepository(session, cache_hooks=cache_hooks),
-            UserVerificationRepository(session, cache_hooks=cache_hooks),
+            UserCoreRepository(session),
+            UserPreferenceRepository(session),
+            UserActivityRepository(session),
+            UserConnectionRepository(session),
+            UserSessionRepository(session),
+            UserVerificationRepository(session),
         )
 
     def __getattr__(self, name: str) -> Any:

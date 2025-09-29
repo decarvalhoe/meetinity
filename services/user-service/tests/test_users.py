@@ -11,47 +11,30 @@ import pytest
 
 from src.db.session import session_scope
 from src.models.repositories import RepositoryError, UserRepository
-from src.services.cache import CacheService
+from src.routes.auth import _profile_cache_key
 
 
 class DummyRedis:
     """Minimal Redis-like interface for testing cache invalidation."""
 
     def __init__(self):
-        self.store: dict[str, str] = {}
+        self.store: dict[str, object] = {}
 
     def get(self, key: str):
         return self.store.get(key)
 
     def setex(self, key: str, ttl: int, value: object):
-        self.store[key] = value if isinstance(value, str) else str(value)
+        self.store[key] = value
 
-    def set(self, key: str, value: object):
-        self.store[key] = value if isinstance(value, str) else str(value)
-
-    def delete(self, *keys: str):
-        for key in keys:
-            self.store.pop(key, None)
-
-    def scan_iter(self, match: str | None = None):
-        keys = list(self.store.keys())
-        if match is None:
-            for key in keys:
-                yield key
-            return
-        if match.endswith("*"):
-            prefix = match[:-1]
-            for key in keys:
-                if key.startswith(prefix):
-                    yield key
-        elif match in self.store:
-            yield match
+    def delete(self, key: str):
+        self.store.pop(key, None)
 
 
 @pytest.fixture
 def seeded_users():
     with session_scope() as session:
         repo = UserRepository(session)
+        now = datetime.now(timezone.utc)
         alice = repo.create_user(
             email="alice@example.com",
             name="Alice",
@@ -79,6 +62,10 @@ def seeded_users():
             skills=["javascript"],
             bio="Enthusiastic engineer",
         )
+        alice.touch_login(now - timedelta(hours=6))
+        carol.touch_login(now - timedelta(hours=2))
+        repo.record_activity(alice, activity_type="login", score_delta=3)
+        repo.record_activity(carol, activity_type="login", score_delta=2)
         yield {"alice": alice, "bob": bob, "carol": carol}
 
 
@@ -97,30 +84,6 @@ def test_list_users_with_filters(client, seeded_users):
     assert payload["total"] == 1
     assert payload["items"][0]["email"] == "alice@example.com"
     assert payload["items"][0]["skills"] == ["python", "flask"]
-
-
-def test_list_users_uses_cache(client, seeded_users, monkeypatch):
-    app = client.application
-    fake_cache = DummyRedis()
-    previous_cache = app.extensions.get("cache_service")
-    app.extensions["cache_service"] = CacheService(fake_cache, 60)
-    try:
-        first = client.get("/users", query_string={"page": 1, "per_page": 2})
-        assert first.status_code == 200
-        assert fake_cache.store  # cache populated
-
-        def _fail(*_args, **_kwargs):  # pragma: no cover - should not run
-            raise AssertionError("repository executed despite cache")
-
-        monkeypatch.setattr("src.routes.users._execute_user_repo", _fail)
-        second = client.get("/users", query_string={"page": 1, "per_page": 2})
-        assert second.status_code == 200
-        assert second.get_json() == first.get_json()
-    finally:
-        if previous_cache is not None:
-            app.extensions["cache_service"] = previous_cache
-        else:
-            app.extensions.pop("cache_service", None)
 
 
 def test_get_user_returns_profile(client, seeded_users):
@@ -146,6 +109,8 @@ def test_update_user(client, seeded_users):
     updated = response.get_json()["user"]
     assert updated["title"] == "Senior Engineer"
     assert "sqlalchemy" in updated["skills"]
+    assert updated["profile_completeness"] >= 30
+    assert updated["trust_score"] >= 0
 
     with session_scope() as session:
         repo = UserRepository(session)
@@ -158,11 +123,10 @@ def test_update_user_clears_cached_profile(client, seeded_users):
     alice_id = seeded_users["alice"].id
     fake_cache = DummyRedis()
     app = client.application
-    previous_cache_service = app.extensions.get("cache_service")
-    app.extensions["cache_service"] = CacheService(fake_cache, 60)
-    cache_service: CacheService = app.extensions["cache_service"]
-    cache_key = cache_service.profile_key(alice_id)
-    cache_service.set_json(cache_key, {"name": "Old Alice"})
+    previous_cache = app.extensions.get("redis_client")
+    app.extensions["redis_client"] = fake_cache
+    cache_key = _profile_cache_key(alice_id)
+    fake_cache.setex(cache_key, 60, {"name": "Old Alice"})
 
     try:
         response = client.put(
@@ -172,10 +136,10 @@ def test_update_user_clears_cached_profile(client, seeded_users):
         assert response.status_code == 200
         assert cache_key not in fake_cache.store
     finally:
-        if previous_cache_service is not None:
-            app.extensions["cache_service"] = previous_cache_service
+        if previous_cache is not None:
+            app.extensions["redis_client"] = previous_cache
         else:
-            app.extensions.pop("cache_service", None)
+            app.extensions.pop("redis_client", None)
 
 
 def test_delete_user(client, seeded_users):
@@ -221,36 +185,26 @@ def test_search_users(client, seeded_users):
     emails = {item["email"] for item in data["items"]}
     assert "carol@example.com" in emails
     assert "alice@example.com" in emails
+    assert "recommendations" in data
+    assert data["recommendation_limit"] >= 1
+    assert any(
+        rec["email"] in {"alice@example.com", "carol@example.com"}
+        for rec in data["recommendations"]
+    )
 
 
-def test_search_users_uses_cache(client, seeded_users, monkeypatch):
-    app = client.application
-    fake_cache = DummyRedis()
-    previous_cache = app.extensions.get("cache_service")
-    app.extensions["cache_service"] = CacheService(fake_cache, 60)
-    try:
-        first = client.get(
-            "/users/search",
-            query_string={"q": "alice", "page": 1, "per_page": 5},
-        )
-        assert first.status_code == 200
-        assert fake_cache.store
-
-        def _fail(*_args, **_kwargs):  # pragma: no cover - should not run
-            raise AssertionError("repository executed despite cache")
-
-        monkeypatch.setattr("src.routes.users._execute_user_repo", _fail)
-        second = client.get(
-            "/users/search",
-            query_string={"q": "alice", "page": 1, "per_page": 5},
-        )
-        assert second.status_code == 200
-        assert second.get_json() == first.get_json()
-    finally:
-        if previous_cache is not None:
-            app.extensions["cache_service"] = previous_cache
-        else:
-            app.extensions.pop("cache_service", None)
+def test_discover_endpoint(client, seeded_users):
+    alice_id = seeded_users["alice"].id
+    response = client.get(
+        "/users/discover",
+        query_string={"user_id": alice_id},
+    )
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert payload["context_user_id"] == alice_id
+    assert payload["recommendations"]
+    recommended_emails = {rec["email"] for rec in payload["recommendations"]}
+    assert "carol@example.com" in recommended_emails
 
 
 def test_upsert_preferences_endpoint(client, seeded_users):
@@ -279,6 +233,16 @@ def test_privacy_update_and_tokens(client, seeded_users):
     user = response.get_json()["user"]
     assert user["privacy_settings"]["profile_visibility"] == "network"
     assert sorted(user["active_tokens"]) == ["alpha", "beta", "gamma"]
+    assert user["privacy_level"] in {"medium", "high", "standard"}
+
+
+def test_get_privacy_endpoint(client, seeded_users):
+    user_id = seeded_users["alice"].id
+    response = client.get(f"/users/{user_id}/privacy")
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert payload["user_id"] == user_id
+    assert "privacy_level" in payload
 
 
 def test_activity_logging_and_listing(client, seeded_users):
@@ -294,13 +258,65 @@ def test_activity_logging_and_listing(client, seeded_users):
     listing = client.get(f"/users/{user_id}/activities")
     assert listing.status_code == 200
     payload = listing.get_json()
-    assert payload["total"] == 1
-    assert payload["items"][0]["score_delta"] == 5
+    assert payload["total"] >= 1
+    assert any(item["score_delta"] == 5 for item in payload["items"])
 
     with session_scope() as session:
         repo = UserRepository(session)
         user = repo.get(user_id)
         assert user.engagement_score >= 5
+
+
+def test_verify_endpoint_flow(client, seeded_users):
+    user_id = seeded_users["alice"].id
+    with session_scope() as session:
+        repo = UserRepository(session)
+        user = repo.get(user_id)
+        repo.create_verification(user, method="email", code="999999")
+
+    baseline_resp = client.get(f"/users/{user_id}")
+    baseline = baseline_resp.get_json()["user"]["trust_score"]
+
+    wrong = client.post(
+        f"/users/{user_id}/verify",
+        json={"method": "email", "code": "111111"},
+    )
+    assert wrong.status_code == 409
+    assert wrong.get_json()["reason"] == "invalid_code"
+
+    success = client.post(
+        f"/users/{user_id}/verify",
+        json={"method": "email", "code": "999999"},
+    )
+    assert success.status_code == 200
+    payload = success.get_json()
+    assert payload["verified"] is True
+    assert payload["verification"]["status"] == "verified"
+    assert payload["user"]["trust_score"] > baseline
+
+
+def test_deactivate_flow(client, seeded_users):
+    user_id = seeded_users["carol"].id
+    reactivation_at = (
+        datetime.now(timezone.utc) + timedelta(days=7)
+    ).isoformat()
+
+    response = client.post(
+        f"/users/{user_id}/deactivate",
+        json={"reactivate_at": reactivation_at},
+    )
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert payload["user"]["is_active"] is False
+    assert payload["deactivated_at"] is not None
+    assert payload["reactivation_at"] is not None
+
+    with session_scope() as session:
+        repo = UserRepository(session)
+        stored = repo.get(user_id)
+        assert stored is not None
+        assert stored.deactivated_at is not None
+        assert stored.reactivation_at is not None
 
 
 def test_session_management_flow(client, seeded_users):

@@ -1,15 +1,9 @@
-# syntax=docker/dockerfile:1.4
-
-ARG PYTHON_VERSION=3.11-slim
-
 # Multi-stage build for Meetinity User Service
 # Stage 1: Build dependencies
-FROM python:${PYTHON_VERSION} AS builder
+FROM python:3.11-slim as builder
 
-ENV PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1 \
-    PIP_NO_CACHE_DIR=1 \
-    DEBIAN_FRONTEND=noninteractive
+# Set build arguments
+ARG DEBIAN_FRONTEND=noninteractive
 
 # Install system dependencies for building
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -26,31 +20,28 @@ ENV PATH="/opt/venv/bin:$PATH"
 COPY requirements.txt .
 
 # Install Python dependencies
-RUN --mount=type=cache,target=/root/.cache/pip \
-    pip install --upgrade pip setuptools wheel && \
+RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir -r requirements.txt
 
 # Stage 2: Runtime
-FROM python:${PYTHON_VERSION} AS runtime
+FROM python:3.11-slim as runtime
 
-ENV PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1 \
-    PIP_NO_CACHE_DIR=1 \
-    PATH="/opt/venv/bin:$PATH" \
-    PYTHONPATH=/app \
-    DEBIAN_FRONTEND=noninteractive
+# Set build arguments
+ARG DEBIAN_FRONTEND=noninteractive
 
 # Install runtime dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     libpq5 \
-    && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/* \
+    && apt-get clean
 
 # Create non-root user
 RUN groupadd -r meetinity && useradd -r -g meetinity -s /bin/bash meetinity
 
 # Copy virtual environment from builder stage
 COPY --from=builder /opt/venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
 
 # Set working directory
 WORKDIR /app
@@ -73,7 +64,9 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD curl -f http://localhost:8080/health || exit 1
 
 # Set environment variables
-ENV FLASK_APP=src.main:create_app \
+ENV PYTHONPATH=/app \
+    PYTHONUNBUFFERED=1 \
+    FLASK_APP=src.main:create_app \
     APP_PORT=8080
 
 # Run database migrations and start the application

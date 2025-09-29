@@ -29,10 +29,6 @@ class User(Base):
     __table_args__ = (
         Index("ix_users_industry_location", "industry", "location"),
         Index("ix_users_created_at", "created_at"),
-        Index("ix_users_updated_at", "updated_at"),
-        Index("ix_users_last_login", "last_login"),
-        Index("ix_users_last_active_at", "last_active_at"),
-        Index("ix_users_experience_years", "experience_years"),
     )
 
     id: Mapped[int] = mapped_column(
@@ -137,6 +133,30 @@ class User(Base):
         nullable=False,
         default=0,
         server_default="0",
+    )
+    profile_completeness: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        default=0,
+        server_default="0",
+    )
+    trust_score: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        default=0,
+        server_default="0",
+    )
+    privacy_level: Mapped[str] = mapped_column(
+        String(32),
+        nullable=False,
+        default="standard",
+        server_default=text("'standard'"),
+    )
+    deactivated_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True)
+    )
+    reactivation_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True)
     )
     privacy_settings: Mapped[dict[str, object]] = mapped_column(
         JSON,
