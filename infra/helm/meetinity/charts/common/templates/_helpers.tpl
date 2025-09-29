@@ -193,4 +193,93 @@ spec:
 {{- $env := include "common.environment" $ctx -}}
 {{- printf "%s-%s" $name $env | trunc 63 | trimSuffix "-" -}}
 {{- end -}}
+
+{{/* Observability helpers */}}
+
+{{- define "common.observabilityConfig" -}}
+{{- $config := dict -}}
+{{- with .Values.global }}
+  {{- with .observability }}
+    {{- $config = mergeOverwrite (deepCopy $config) (deepCopy .) -}}
+  {{- end -}}
+{{- end -}}
+{{- with .Values.observability }}
+  {{- $config = mergeOverwrite (deepCopy $config) (deepCopy .) -}}
+{{- end -}}
+{{- toYaml $config -}}
+{{- end -}}
+
+{{- define "common.tracingAgentContainers" -}}
+{{- $tracing := .tracing | default (dict) -}}
+{{- $serviceName := .serviceName -}}
+{{- if and ($tracing.enabled | default false) (and $tracing.agent ($tracing.agent.enabled | default false)) }}
+- name: {{ default "tracing-agent" $tracing.agent.name }}
+  image: "{{ $tracing.agent.image.repository }}:{{ $tracing.agent.image.tag }}"
+  imagePullPolicy: {{ default "IfNotPresent" $tracing.agent.image.pullPolicy }}
+  {{- with $tracing.agent.securityContext }}
+  securityContext:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  {{- $collector := $tracing.agent.collector | default (dict) -}}
+  {{- $args := $tracing.agent.extraArgs | default list -}}
+  args:
+    {{- if gt (len $args) 0 }}
+      {{- range $args }}
+    - {{ . | quote }}
+      {{- end }}
+    {{- else }}
+    - "--reporter.grpc.host-port={{ printf "%s:%v" (default "jaeger-collector.observability.svc.cluster.local" $collector.host) (default 14250 $collector.port) }}"
+    - "--agent.tags=service.name={{ $serviceName }}"
+    {{- end }}
+  env:
+    - name: POD_IP
+      valueFrom:
+        fieldRef:
+          fieldPath: status.podIP
+    {{- with $collector.host }}
+    - name: JAEGER_COLLECTOR_HOST
+      value: {{ . | quote }}
+    {{- end }}
+    {{- with $collector.port }}
+    - name: JAEGER_COLLECTOR_PORT
+      value: "{{ . }}"
+    {{- end }}
+    {{- range $env := ($tracing.agent.env | default list) }}
+    - name: {{ $env.name }}
+      {{- if $env.valueFrom }}
+      valueFrom:
+        {{- toYaml $env.valueFrom | nindent 8 }}
+      {{- else }}
+      value: {{ $env.value | quote }}
+      {{- end }}
+    {{- end }}
+  {{- if $tracing.agent.ports }}
+  ports:
+    {{- toYaml $tracing.agent.ports | nindent 4 }}
+  {{- end }}
+  {{- if $tracing.agent.resources }}
+  resources:
+    {{- toYaml $tracing.agent.resources | nindent 4 }}
+  {{- end }}
+  {{- if $tracing.agent.extraVolumeMounts }}
+  volumeMounts:
+    {{- toYaml $tracing.agent.extraVolumeMounts | nindent 4 }}
+  {{- end }}
+  {{- if $tracing.agent.livenessProbe }}
+  livenessProbe:
+    {{- toYaml $tracing.agent.livenessProbe | nindent 4 }}
+  {{- end }}
+  {{- if $tracing.agent.readinessProbe }}
+  readinessProbe:
+    {{- toYaml $tracing.agent.readinessProbe | nindent 4 }}
+  {{- end }}
+{{- end }}
+{{- end -}}
+
+{{- define "common.tracingAgentVolumes" -}}
+{{- $tracing := .tracing | default (dict) -}}
+{{- if and ($tracing.enabled | default false) (and $tracing.agent ($tracing.agent.enabled | default false)) ($tracing.agent.extraVolumes) }}
+{{- toYaml $tracing.agent.extraVolumes -}}
+{{- end -}}
+{{- end -}}
 {{- end }}

@@ -26,6 +26,46 @@ global:
       password: password
       url: url
       readerUrl: reader_url
+  observability:
+    tracing:
+      enabled: false
+      serviceName: ""
+      propagators:
+        - tracecontext
+        - baggage
+      sampler:
+        type: parentbased_traceidratio
+        ratio: 1.0
+      exporter:
+        endpoint: "http://jaeger-collector.observability.svc.cluster.local:4317"
+        protocol: grpc
+        headers: {}
+      resourceAttributes: {}
+      agent:
+        enabled: false
+        name: jaeger-agent
+        image:
+          repository: jaegertracing/jaeger-agent
+          tag: "1.52.0"
+          pullPolicy: IfNotPresent
+        collector:
+          host: jaeger-collector.observability.svc.cluster.local
+          port: 14250
+          protocol: grpc
+        ports:
+          - name: jaeger-udp-compact
+            containerPort: 6831
+            protocol: UDP
+          - name: jaeger-udp-binary
+            containerPort: 6832
+            protocol: UDP
+        env: []
+        extraArgs: []
+        resources: {}
+        extraVolumeMounts: []
+        extraVolumes: []
+        livenessProbe: {}
+        readinessProbe: {}
 
 shared:
   configMaps:
