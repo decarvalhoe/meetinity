@@ -183,6 +183,35 @@ variable "redis_config" {
   }
 }
 
+variable "search_domain_config" {
+  description = "Configuration for the managed OpenSearch domain backing the search service."
+  type = object({
+    name                         = string
+    engine_version               = optional(string, "OpenSearch_2.11")
+    instance_type                = optional(string, "t3.medium.search")
+    instance_count               = optional(number, 2)
+    zone_awareness_count         = optional(number, 2)
+    ebs_volume_size              = optional(number, 100)
+    ebs_volume_type              = optional(string, "gp3")
+    allowed_cidr_blocks          = optional(list(string), [])
+    allowed_security_group_ids   = optional(list(string), [])
+    additional_security_group_ids = optional(list(string), [])
+    enforce_https                = optional(bool, true)
+    tls_security_policy          = optional(string, "Policy-Min-TLS-1-2-2019-07")
+    node_to_node_encryption      = optional(bool, true)
+    enable_fine_grained_access   = optional(bool, true)
+    enable_internal_user_db      = optional(bool, true)
+    master_user_name             = optional(string, "meetinity-search")
+    master_user_password         = string
+    search_logs_arn              = optional(string, "")
+    kms_key_id                   = optional(string)
+  })
+  default = {
+    name                 = "search"
+    master_user_password = "ChangeMe123!"
+  }
+}
+
 variable "analytics_warehouse_config" {
   description = "Configuration for the analytics data warehouse cluster."
   type = object({

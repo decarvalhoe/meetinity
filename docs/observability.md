@@ -89,3 +89,32 @@ Recommended Grafana dashboards:
 - Reindex Elasticsearch monthly to keep shard sizes consistent and archive indices older than 90 days to cold storage if retention requires.
 
 By following this playbook, the Meetinity platform gains end-to-end observability coverage with consistent deployment artefacts and operational procedures.
+
+## Search Service runbook
+
+The Search Service publishes operational metrics and logs through the same pipelines described above. Additional guidelines ensure relevancy remains healthy and the OpenSearch domain stays within limits:
+
+- **Ingestion pipelines** – REST ingesters emit structured logs (`pipeline`, `indexed`, `latency_ms`) that land in the `logs-search-service-*` index. Alert when ingestion drops to zero for more than 15 minutes or bulk indexing errors exceed 5%.
+- **Query quality** – The GraphQL endpoint exposes latency histograms (`graphql.search.duration`) and cache hit ratios. Grafana panels should watch the p95 search latency (< 400 ms) and the ratio of zero-result queries (keep < 8%).
+- **Domain health** – Monitor `ClusterPendingTasks`, `JVMMemoryPressure`, and `SearchQueue` from the managed OpenSearch CloudWatch metrics. Alert at 75% JVM pressure (scale cluster) and 50 queued searches (investigate slow queries).
+
+### Relevancy tuning workflow
+
+1. Export current synonym configuration with `scripts/search/manage_index.py synonyms <index> synonyms.txt` to capture the active rules.
+2. Review miss search queries in Kibana (`event.action:search AND response.results:0`) and add synonyms/boosts accordingly.
+3. Update the synonyms file in Git and redeploy. Apply changes without downtime using:
+
+   ```bash
+   scripts/search/manage_index.py --host "https://search.<env>.meetinity.com" --username "$SEARCH_USERNAME" --password "$SEARCH_PASSWORD" synonyms meetinity-events configs/synonyms/events.txt
+   ```
+
+4. Run an A/B search test via the GraphQL API (send baseline & candidate queries) and compare click-through metrics captured by the analytics warehouse.
+
+### Index lifecycle operations
+
+- **Create**: `scripts/search/manage_index.py create meetinity-events --schema schemas/events.json`
+- **Delete**: `scripts/search/manage_index.py delete meetinity-events` (automatically ignores missing indices).
+- **Reindex**: `scripts/search/manage_index.py reindex meetinity-events meetinity-events-v2` followed by alias swaps in Terraform/Helm if the new index performs better.
+- **Synonym rotation**: keep canonical synonym files under `configs/synonyms/` and update them via the command above.
+
+Store management commands in incident tickets to maintain an audit trail. The OpenSearch IAM user issued by Terraform should have `es:ESHttp*` rights restricted to the managed domain only.

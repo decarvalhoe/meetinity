@@ -362,3 +362,58 @@ moderation-service:
             KAFKA_BOOTSTRAP_SERVERS: '{{ .data.kafka_bootstrap | default "kafka:9092" }}'
             KAFKA_MODERATION_TOPIC: '{{ .data.kafka_topic | default "moderation.events" }}'
             ML_CLASSIFIER_URL: '{{ .data.ml_classifier_url | default "" }}'
+
+search-service:
+  environment: prod
+  domain: meetinity.com
+  replicaCount: 3
+  autoscaling:
+    minReplicas: 3
+    maxReplicas: 6
+    metrics:
+      - type: Resource
+        resource:
+          name: cpu
+          target:
+            type: Utilization
+            averageUtilization: 50
+      - type: Resource
+        resource:
+          name: memory
+          target:
+            type: Utilization
+            averageUtilization: 60
+      - type: Pods
+        pods:
+          metric:
+            name: search_queries_per_second
+          target:
+            type: AverageValue
+            averageValue: "40"
+  resources:
+    requests:
+      cpu: 300m
+      memory: 512Mi
+    limits:
+      cpu: 800m
+      memory: 1Gi
+  podDisruptionBudget:
+    minAvailable: 2
+  env:
+    - name: SEARCH_NODES
+      value: https://search.meetinity.com
+    - name: SEARCH_VERIFY_CERTS
+      value: "1"
+    - name: SEARCH_TIMEOUT
+      value: "10"
+  vaultSecrets:
+    - name: search-service-opensearch
+      path: kv/data/prod/search-service/opensearch
+      secretStoreRef:
+        name: vault-prod
+      target:
+        template:
+          type: Opaque
+          data:
+            SEARCH_USERNAME: '{{ .data.username | default "" }}'
+            SEARCH_PASSWORD: '{{ .data.password | default "" }}'

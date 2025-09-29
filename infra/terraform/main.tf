@@ -126,6 +126,36 @@ module "redis" {
   tags                       = local.default_tags
 }
 
+module "search" {
+  source = "./modules/opensearch"
+
+  name                         = "${var.environment}-${var.search_domain_config.name}"
+  engine_version               = var.search_domain_config.engine_version
+  instance_type                = var.search_domain_config.instance_type
+  instance_count               = var.search_domain_config.instance_count
+  zone_awareness_count         = var.search_domain_config.zone_awareness_count
+  ebs_volume_size              = var.search_domain_config.ebs_volume_size
+  ebs_volume_type              = var.search_domain_config.ebs_volume_type
+  subnet_ids                   = module.vpc.private_subnet_ids
+  vpc_id                       = module.vpc.vpc_id
+  allowed_cidr_blocks          = var.search_domain_config.allowed_cidr_blocks
+  allowed_security_group_ids   = distinct(concat(var.search_domain_config.allowed_security_group_ids, [
+    module.eks.node_security_group_id,
+    module.eks.cluster_security_group_id,
+  ]))
+  additional_security_group_ids = var.search_domain_config.additional_security_group_ids
+  enforce_https                = var.search_domain_config.enforce_https
+  tls_security_policy          = var.search_domain_config.tls_security_policy
+  node_to_node_encryption      = var.search_domain_config.node_to_node_encryption
+  enable_fine_grained_access   = var.search_domain_config.enable_fine_grained_access
+  enable_internal_user_db      = var.search_domain_config.enable_internal_user_db
+  master_user_name             = var.search_domain_config.master_user_name
+  master_user_password         = var.search_domain_config.master_user_password
+  search_logs_arn              = var.search_domain_config.search_logs_arn
+  kms_key_id                   = try(var.search_domain_config.kms_key_id, null)
+  tags                         = local.default_tags
+}
+
 module "analytics_warehouse" {
   source = "./modules/redshift"
 

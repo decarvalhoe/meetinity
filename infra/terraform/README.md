@@ -12,6 +12,7 @@ This Terraform configuration bootstraps the AWS infrastructure required to run t
 - **Shared load balancers** – Application and Network Load Balancers ready to accept targets from EKS/EC2 workloads.
 - **AWS Backup plan** – Daily backups for the Aurora PostgreSQL cluster with configurable retention windows.
 - **Cost monitoring** – Monthly AWS Budget capable of notifying stakeholders when spend exceeds thresholds.
+- **Managed search domain** – Highly available OpenSearch cluster with TLS enforced endpoints for the Search Service.
 
 ## Usage
 

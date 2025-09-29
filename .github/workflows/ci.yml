@@ -177,6 +177,30 @@ jobs:
       - name: Run pytest
         run: pytest -vv
 
+  search-service-tests:
+    name: Search Service Tests
+    needs: build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: services/search-service
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt pytest
+
+      - name: Run pytest
+        env:
+          SEARCH_USE_IN_MEMORY: '1'
+        run: pytest -vv
+
   payment-contract-tests:
     name: Payment Contract Tests
     needs: payment-service-tests

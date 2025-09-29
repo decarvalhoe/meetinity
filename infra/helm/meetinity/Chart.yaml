@@ -26,3 +26,6 @@ dependencies:
   - name: moderation-service
     version: 0.1.0
     repository: "file://charts/moderation-service"
+  - name: search-service
+    version: 0.1.0
+    repository: "file://charts/search-service"

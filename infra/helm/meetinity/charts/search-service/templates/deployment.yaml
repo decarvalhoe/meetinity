@@ -1,0 +1,108 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "search-service.fullname" . }}
+  labels:
+    {{- include "search-service.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "search-service.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "search-service.selectorLabels" . | nindent 8 }}
+    spec:
+      serviceAccountName: {{ include "search-service.serviceAccountName" . }}
+      {{- $observability := (include "common.observabilityConfig" . | fromYaml) | default (dict) }}
+      {{- $tracing := get $observability "tracing" | default (dict) }}
+      {{- $defaultServiceName := include "common.releaseName" (dict "name" .Chart.Name "context" .) }}
+      {{- $serviceName := $defaultServiceName }}
+      {{- with $tracing.serviceName }}
+        {{- $serviceName = . }}
+      {{- end }}
+      containers:
+        - name: {{ .Chart.Name }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.service.port }}
+              protocol: TCP
+          {{- $env := list }}
+          {{- range $index, $item := (.Values.env | default list) }}
+          {{- $env = append $env $item }}
+          {{- end }}
+          {{- $dbConfig := default (dict) (get .Values.global "database") }}
+          {{- $dbSecretName := default "" (get $dbConfig "secretName") }}
+          {{- $dbSecretKeys := default (dict) (get $dbConfig "secretKeys") }}
+          {{- $dbUrlKey := default "" (get $dbSecretKeys "url") }}
+          {{- if and $dbSecretName $dbUrlKey }}
+          {{- $env = append $env (dict "name" "DATABASE_URL" "valueFrom" (dict "secretKeyRef" (dict "name" $dbSecretName "key" $dbUrlKey))) }}
+          {{- end }}
+          {{- if $tracing.enabled }}
+          {{- $env = append $env (dict "name" "OTEL_SERVICE_NAME" "value" $serviceName) }}
+          {{- with $tracing.exporter }}
+            {{- with .endpoint }}
+          {{- $env = append $env (dict "name" "OTEL_EXPORTER_OTLP_ENDPOINT" "value" .) }}
+            {{- end }}
+            {{- with .protocol }}
+          {{- $env = append $env (dict "name" "OTEL_EXPORTER_OTLP_PROTOCOL" "value" .) }}
+            {{- end }}
+            {{- with .headers }}
+          {{- $pairs := list }}
+          {{- range $k, $v := . }}
+          {{- $pairs = append $pairs (printf "%s=%s" $k $v) }}
+          {{- end }}
+          {{- if gt (len $pairs) 0 }}
+          {{- $env = append $env (dict "name" "OTEL_EXPORTER_OTLP_HEADERS" "value" (join "," $pairs)) }}
+          {{- end }}
+            {{- end }}
+          {{- end }}
+          {{- with $tracing.propagators }}
+          {{- $env = append $env (dict "name" "OTEL_PROPAGATORS" "value" (join "," .)) }}
+          {{- end }}
+          {{- with $tracing.sampler }}
+            {{- if .type }}
+          {{- $env = append $env (dict "name" "OTEL_TRACES_SAMPLER" "value" .type) }}
+            {{- end }}
+            {{- if hasKey . "ratio" }}
+          {{- $env = append $env (dict "name" "OTEL_TRACES_SAMPLER_ARG" "value" (printf "%v" .ratio)) }}
+            {{- end }}
+          {{- end }}
+          {{- $resourceAttrs := dict }}
+          {{- if $tracing.resourceAttributes }}
+            {{- $resourceAttrs = deepCopy $tracing.resourceAttributes }}
+          {{- end }}
+          {{- if and $tracing.enabled (not (hasKey $resourceAttrs "deployment.environment")) }}
+            {{- $_ := set $resourceAttrs "deployment.environment" (include "common.environment" .) }}
+          {{- end }}
+          {{- if gt (len $resourceAttrs) 0 }}
+          {{- $attrPairs := list }}
+          {{- range $k, $v := $resourceAttrs }}
+          {{- $attrPairs = append $attrPairs (printf "%s=%s" $k $v) }}
+          {{- end }}
+          {{- if gt (len $attrPairs) 0 }}
+          {{- $env = append $env (dict "name" "OTEL_RESOURCE_ATTRIBUTES" "value" (join "," $attrPairs)) }}
+          {{- end }}
+          {{- end }}
+          {{- if and $tracing.agent ($tracing.agent.enabled | default false) }}
+          {{- $agentPort := default 6831 (dig $tracing.agent "ports" 0 "containerPort") }}
+          {{- $env = append $env (dict "name" "JAEGER_AGENT_HOST" "value" "127.0.0.1") }}
+          {{- $env = append $env (dict "name" "JAEGER_AGENT_PORT" "value" (printf "%v" $agentPort)) }}
+          {{- end }}
+          {{- end }}
+          {{- if gt (len $env) 0 }}
+          env:
+            {{- toYaml $env | nindent 12 }}
+          {{- end }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          {{- include "common.httpProbes" (dict "port" .Values.service.port "liveness" .Values.livenessProbe "readiness" .Values.readinessProbe) | nindent 10 }}
+        {{- include "common.tracingAgentContainers" (dict "tracing" $tracing "serviceName" $serviceName) | nindent 8 }}
+      {{- $extraVolumes := include "common.tracingAgentVolumes" (dict "tracing" $tracing) }}
+      {{- if $extraVolumes }}
+      volumes:
+        {{- $extraVolumes | nindent 8 }}
+      {{- end }}
