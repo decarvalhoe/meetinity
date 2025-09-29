@@ -5,7 +5,7 @@ import logging
 import os
 import time
 from pathlib import Path
-from typing import Any, Callable, Dict, Tuple
+from typing import Any, Callable, Dict, Sequence, Tuple
 
 import requests
 from flask import Flask, current_app, g, jsonify, request
@@ -31,7 +31,13 @@ from .observability import (
 from .security.api_keys import configure_api_keys
 from .security.oauth import DiscoveryError, OIDCProvider
 from .security.signatures import configure_request_signatures
-from .services.registry import create_service_registry
+from .services.registry import (
+    DEFAULT_UPSTREAM_SERVICES,
+    ResolvedUpstreamService,
+    UpstreamServiceConfig,
+    create_service_registry,
+    resolve_upstream_services,
+)
 from .transformations import build_pipeline, load_transformation_rules
 from .utils.config import (
     EnvironmentSettings,
@@ -287,23 +293,57 @@ def _check_gateway_health(app: Flask) -> HealthResult:
     return "up", {"logger": app.logger.name}, 200
 
 
-def _check_user_service_health(app: Flask) -> HealthResult:
-    url = app.config.get("USER_SERVICE_URL", "").rstrip("/")
-    if not url:
-        return "degraded", {"message": "USER_SERVICE_URL not configured"}, 200
+def _make_upstream_health_check(
+    service: ResolvedUpstreamService,
+) -> Callable[[Flask], HealthResult]:
+    def _check(app: Flask) -> HealthResult:
+        configured_url = str(
+            app.config.get(service.config.url_key, service.base_url) or ""
+        ).rstrip("/")
+        if not configured_url:
+            return (
+                "degraded",
+                {
+                    "message": f"{service.config.url_key} not configured",
+                    "service": service.service_name,
+                },
+                200,
+            )
 
-    target = f"{url}/health"
-    try:
-        response = requests.get(target, timeout=(2, 5))
-    except requests.RequestException as exc:
-        return "down", {"message": str(exc), "target": target}, 503
+        target = f"{configured_url}/health"
+        try:
+            response = requests.get(target, timeout=(2, 5))
+        except requests.RequestException as exc:
+            return (
+                "down",
+                {"message": str(exc), "target": target, "service": service.service_name},
+                503,
+            )
 
-    if response.status_code == 200:
-        return "up", {"target": target, "status_code": response.status_code}, 200
+        if response.status_code == 200:
+            return (
+                "up",
+                {
+                    "target": target,
+                    "status_code": response.status_code,
+                    "service": service.service_name,
+                },
+                200,
+            )
 
-    status = "degraded" if response.status_code < 500 else "down"
-    http_status = 200 if status == "degraded" else 503
-    return status, {"target": target, "status_code": response.status_code}, http_status
+        status = "degraded" if response.status_code < 500 else "down"
+        http_status = 200 if status == "degraded" else 503
+        return (
+            status,
+            {
+                "target": target,
+                "status_code": response.status_code,
+                "service": service.service_name,
+            },
+            http_status,
+        )
+
+    return _check
 
 
 def _check_service_registry_health(app: Flask) -> HealthResult:
@@ -311,16 +351,24 @@ def _check_service_registry_health(app: Flask) -> HealthResult:
     if not registry:
         return "degraded", {"message": "Registry not initialised"}, 200
 
-    service_name = app.config.get("USER_SERVICE_NAME", "user-service")
-    try:
-        instances = registry.get_instances(service_name, force_refresh=True)
-    except Exception as exc:  # pragma: no cover - defensive
-        return "down", {"message": str(exc), "service": service_name}, 503
+    services: Tuple[ResolvedUpstreamService, ...] = tuple(
+        app.config.get("RESOLVED_UPSTREAM_SERVICES", ())
+    )
+    details: Dict[str, Any] = {"services": {}}
+    overall = "up"
 
-    if not instances:
-        return "degraded", {"message": "No instances discovered", "service": service_name}, 200
+    for service in services:
+        try:
+            instances = registry.get_instances(service.service_name, force_refresh=True)
+        except Exception as exc:  # pragma: no cover - defensive
+            return "down", {"message": str(exc), "service": service.service_name}, 503
 
-    return "up", {"instances": [inst.url for inst in instances], "service": service_name}, 200
+        urls = [inst.url for inst in instances]
+        details["services"][service.service_name] = urls
+        if not urls and overall == "up":
+            overall = "degraded"
+
+    return overall, details, 200
 
 
 def _check_oidc_health(app: Flask) -> HealthResult:
@@ -353,14 +401,21 @@ def _check_observability_health(app: Flask) -> HealthResult:
     return "up", {"logger": app.logger.name}, 200
 
 
-def _register_health_endpoints(app: Flask) -> None:
+def _register_health_endpoints(
+    app: Flask, resolved_upstreams: Sequence[ResolvedUpstreamService]
+) -> None:
     checks: Dict[str, Callable[[Flask], HealthResult]] = {
         "gateway": _check_gateway_health,
-        "user-service": _check_user_service_health,
         "service-registry": _check_service_registry_health,
         "oidc": _check_oidc_health,
         "observability": _check_observability_health,
     }
+    upstream_dependencies: list[tuple[str, str]] = []
+    for upstream in resolved_upstreams:
+        dependency_name = upstream.config.dependency_name or upstream.service_name
+        payload_key = upstream.config.payload_key or upstream.config.prefix.lower()
+        checks[dependency_name] = _make_upstream_health_check(upstream)
+        upstream_dependencies.append((dependency_name, payload_key))
 
     def _execute(check_name: str) -> Tuple[str, Dict[str, Any], int]:
         check = checks.get(check_name)
@@ -391,7 +446,8 @@ def _register_health_endpoints(app: Flask) -> None:
             "dependencies": dependency_status,
         }
         payload["upstreams"] = {
-            "user_service": dependency_status.get("user-service", {}).get("status", "unknown")
+            key: dependency_status.get(name, {}).get("status", "unknown")
+            for name, key in upstream_dependencies
         }
         return jsonify(payload), http_status
 
@@ -476,6 +532,18 @@ def create_app() -> Flask:
     app.config["USER_SERVICE_STATIC_INSTANCES"] = _get_env(
         "USER_SERVICE_STATIC_INSTANCES", ""
     ) or ""
+    app.config["EVENT_SERVICE_URL"] = _get_env("EVENT_SERVICE_URL", "") or ""
+    app.config["EVENT_SERVICE_NAME"] = _get_env("EVENT_SERVICE_NAME", "event-service") or "event-service"
+    app.config["EVENT_SERVICE_STATIC_INSTANCES"] = _get_env(
+        "EVENT_SERVICE_STATIC_INSTANCES", ""
+    ) or ""
+    app.config["MATCHING_SERVICE_URL"] = _get_env("MATCHING_SERVICE_URL", "") or ""
+    app.config["MATCHING_SERVICE_NAME"] = _get_env(
+        "MATCHING_SERVICE_NAME", "matching-service"
+    ) or "matching-service"
+    app.config["MATCHING_SERVICE_STATIC_INSTANCES"] = _get_env(
+        "MATCHING_SERVICE_STATIC_INSTANCES", ""
+    ) or ""
     app.config["SERVICE_DISCOVERY_BACKEND"] = _get_env(
         "SERVICE_DISCOVERY_BACKEND", "static"
     ) or "static"
@@ -487,6 +555,8 @@ def create_app() -> Flask:
     ) or "round_robin"
     app.config["JWT_SECRET"] = _get_env("JWT_SECRET", "") or ""
     app.config["RATE_LIMIT_AUTH"] = _get_env("RATE_LIMIT_AUTH", "10/minute") or "10/minute"
+    app.config["RATE_LIMIT_EVENTS"] = _get_env("RATE_LIMIT_EVENTS", "10/minute") or "10/minute"
+    app.config["RATE_LIMIT_MATCHING"] = _get_env("RATE_LIMIT_MATCHING", "10/minute") or "10/minute"
     app.config["API_KEYS"] = api_keys_raw
     app.config["API_KEY_HEADER"] = _get_env("API_KEY_HEADER", "X-API-Key") or "X-API-Key"
     app.config["API_KEY_SALT"] = _get_env("API_KEY_SALT", "") or ""
@@ -675,7 +745,13 @@ def create_app() -> Flask:
             app.config["OAUTH_PROVIDER_URL"], cache_ttl=oauth_cache_ttl
         )
 
-    app.extensions["service_registry"] = create_service_registry(app.config)
+    resolved_upstreams = resolve_upstream_services(
+        app.config, DEFAULT_UPSTREAM_SERVICES
+    )
+    app.config["RESOLVED_UPSTREAM_SERVICES"] = resolved_upstreams
+    app.extensions["service_registry"] = create_service_registry(
+        app.config, resolved_services=resolved_upstreams
+    )
     app.extensions["resilience_middleware"] = ResilienceMiddleware(
         failure_threshold=app.config["CIRCUIT_BREAKER_FAILURE_THRESHOLD"],
         recovery_time=app.config["CIRCUIT_BREAKER_RESET_TIMEOUT"],
@@ -731,7 +807,7 @@ def create_app() -> Flask:
     from .routes import register_versioned_proxy_blueprints
 
     register_versioned_proxy_blueprints(app)
-    _register_health_endpoints(app)
+    _register_health_endpoints(app, resolved_upstreams)
     configure_tracing(app)
     session = _configure_http_session(app)
     register_shutdown_task("http_session", session.close)

@@ -31,11 +31,25 @@ def _patch_proxy_session(monkeypatch, handler):
     return mock_session
 
 
+def _make_jwt_token(secret: str = "secret", sub: str = "user-123") -> str:
+    now = datetime.now(timezone.utc)
+    payload = {
+        "sub": sub,
+        "exp": now + timedelta(minutes=5),
+        "iat": now,
+    }
+    return jwt.encode(payload, secret, algorithm="HS256")
+
+
 def _create_app_without_cors_origins(monkeypatch):
     monkeypatch.delenv("CORS_ORIGINS", raising=False)
     monkeypatch.setenv("USER_SERVICE_URL", "http://upstream")
+    monkeypatch.setenv("EVENT_SERVICE_URL", "http://events")
+    monkeypatch.setenv("MATCHING_SERVICE_URL", "http://matching")
     monkeypatch.setenv("JWT_SECRET", "secret")
     monkeypatch.setenv("RATE_LIMIT_AUTH", "10/minute")
+    monkeypatch.setenv("RATE_LIMIT_EVENTS", "10/minute")
+    monkeypatch.setenv("RATE_LIMIT_MATCHING", "10/minute")
     monkeypatch.setenv("RESILIENCE_BACKOFF_FACTOR", "0")
 
     mock_resp = Mock()
@@ -52,9 +66,13 @@ def _create_app_without_cors_origins(monkeypatch):
 @pytest.fixture
 def app(monkeypatch):
     os.environ["USER_SERVICE_URL"] = "http://upstream"
+    os.environ["EVENT_SERVICE_URL"] = "http://events"
+    os.environ["MATCHING_SERVICE_URL"] = "http://matching"
     os.environ["CORS_ORIGINS"] = ""
     os.environ["JWT_SECRET"] = "secret"
     os.environ["RATE_LIMIT_AUTH"] = "10/minute"
+    os.environ["RATE_LIMIT_EVENTS"] = "10/minute"
+    os.environ["RATE_LIMIT_MATCHING"] = "10/minute"
     os.environ["RESILIENCE_BACKOFF_FACTOR"] = "0"
 
     mock_resp = Mock()
@@ -79,6 +97,8 @@ def test_health(client):
     assert response.status_code == 200
     assert response.json["status"] == "ok"
     assert response.json["upstreams"]["user_service"] == "up"
+    assert response.json["upstreams"]["event_service"] == "up"
+    assert response.json["upstreams"]["matching_service"] == "up"
 
 
 def test_health_upstream_down(client, monkeypatch):
@@ -91,10 +111,24 @@ def test_health_upstream_down(client, monkeypatch):
     assert response.status_code == 503
     assert response.json["status"] == "error"
     assert response.json["upstreams"]["user_service"] == "down"
+    assert response.json["upstreams"]["event_service"] == "down"
+    assert response.json["upstreams"]["matching_service"] == "down"
 
 
 def test_users_requires_jwt(client):
     response = client.get("/api/users/me")
+    assert response.status_code == 401
+    assert response.json == {"error": {"code": 401, "message": "Unauthorized"}}
+
+
+def test_events_requires_jwt(client):
+    response = client.get("/api/events")
+    assert response.status_code == 401
+    assert response.json == {"error": {"code": 401, "message": "Unauthorized"}}
+
+
+def test_matching_requires_jwt(client):
+    response = client.get("/api/matching")
     assert response.status_code == 401
     assert response.json == {"error": {"code": 401, "message": "Unauthorized"}}
 
@@ -132,6 +166,86 @@ def test_proxy_preserves_duplicate_query_params(client, monkeypatch):
     assert response.status_code == 200
     assert captured["params"] == [("tag", "a"), ("tag", "b")]
     assert captured["timeout"] == (2.0, 10.0)
+
+
+def test_events_proxy_targets_event_service(client, monkeypatch):
+    token = _make_jwt_token(sub="event-tester")
+    captured: dict[str, object] = {}
+
+    def fake_execute(**kwargs):
+        registry = kwargs["registry"]
+        service_name = kwargs["service_name"]
+        instances = registry.get_instances(service_name)
+        captured["service_name"] = service_name
+        captured["instances"] = [inst.url for inst in instances]
+        assert instances, "Expected event service instances"
+        return kwargs["request_func"](instances[0])
+
+    resilience = client.application.extensions["resilience_middleware"]
+    monkeypatch.setattr(resilience, "execute", fake_execute)
+
+    calls: list[str] = []
+
+    def fake_request(method, url, **kwargs):
+        calls.append(url)
+        mock_resp = Mock()
+        mock_resp.status_code = 200
+        mock_resp.content = b"{}"
+        mock_resp.headers = {}
+        mock_resp.raw = Mock(headers={})
+        return mock_resp
+
+    _patch_proxy_session(monkeypatch, fake_request)
+
+    response = client.get(
+        "/api/events/list",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    assert response.status_code == 200
+    assert captured["service_name"] == "event-service"
+    assert any(url.startswith("http://events") for url in captured["instances"])
+    assert any(url.startswith("http://events") and url.endswith("/events/list") for url in calls)
+
+
+def test_matching_proxy_targets_matching_service(client, monkeypatch):
+    token = _make_jwt_token(sub="matching-tester")
+    captured: dict[str, object] = {}
+
+    def fake_execute(**kwargs):
+        registry = kwargs["registry"]
+        service_name = kwargs["service_name"]
+        instances = registry.get_instances(service_name)
+        captured["service_name"] = service_name
+        captured["instances"] = [inst.url for inst in instances]
+        assert instances, "Expected matching service instances"
+        return kwargs["request_func"](instances[0])
+
+    resilience = client.application.extensions["resilience_middleware"]
+    monkeypatch.setattr(resilience, "execute", fake_execute)
+
+    calls: list[str] = []
+
+    def fake_request(method, url, **kwargs):
+        calls.append(url)
+        mock_resp = Mock()
+        mock_resp.status_code = 200
+        mock_resp.content = b"{}"
+        mock_resp.headers = {}
+        mock_resp.raw = Mock(headers={})
+        return mock_resp
+
+    _patch_proxy_session(monkeypatch, fake_request)
+
+    response = client.get(
+        "/api/matching/find",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    assert response.status_code == 200
+    assert captured["service_name"] == "matching-service"
+    assert any(url.startswith("http://matching") for url in captured["instances"])
+    assert any(url.startswith("http://matching") and url.endswith("/matching/find") for url in calls)
 
 
 def test_proxy_preserves_multiple_set_cookie_headers(client, monkeypatch):

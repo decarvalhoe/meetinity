@@ -31,6 +31,8 @@ def _patch_proxy_session(monkeypatch, handler):
 
 def test_metrics_endpoint_records_requests(monkeypatch):
     monkeypatch.setenv("USER_SERVICE_URL", "http://upstream")
+    monkeypatch.setenv("EVENT_SERVICE_URL", "http://events")
+    monkeypatch.setenv("MATCHING_SERVICE_URL", "http://matching")
     app = create_app()
 
     client = app.test_client()
@@ -50,6 +52,8 @@ def test_proxy_tracing_creates_spans(monkeypatch):
     exporter = InMemorySpanExporter()
 
     monkeypatch.setenv("USER_SERVICE_URL", "http://upstream")
+    monkeypatch.setenv("EVENT_SERVICE_URL", "http://events")
+    monkeypatch.setenv("MATCHING_SERVICE_URL", "http://matching")
     monkeypatch.setenv("LOG_AGGREGATORS", "")
 
     monkeypatch.setattr(app_module, "configure_tracing", lambda app: None)
