@@ -1,0 +1,25 @@
+name: "meetinity_analytics"
+version: "1.0.0"
+config-version: 2
+
+profile: "meetinity_analytics"
+
+model-paths: ["models"]
+seed-paths: ["seeds"]
+test-paths: ["tests"]
+macro-paths: ["macros"]
+
+models:
+  meetinity_analytics:
+    +materialized: view
+    staging:
+      +materialized: table
+      +schema: staging
+    marts:
+      +materialized: table
+      +schema: marts
+
+seeds:
+  meetinity_analytics:
+    +quote_columns: false
+    +schema: staging

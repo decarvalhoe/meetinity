@@ -16,6 +16,38 @@ prometheus:
     serviceMonitorSelectorNilUsesHelmValues: false
     podMonitorSelectorNilUsesHelmValues: false
     ruleSelectorNilUsesHelmValues: false
+    additionalPrometheusRulesMap:
+      data-pipelines:
+        groups:
+          - name: data-pipeline-health
+            rules:
+              - alert: AirflowDAGFailures
+                expr: increase(airflow_dag_run_failed{dag_id=~"meetinity_.*"}[30m]) > 0
+                for: 10m
+                labels:
+                  severity: high
+                  team: data-platform
+                annotations:
+                  summary: Airflow DAG failures detected
+                  description: Airflow reported at least one failed run for a Meetinity DAG in the last 30 minutes. Investigate logs in Airflow.
+              - alert: DataPipelineFreshnessSLO
+                expr: increase(airflow_dag_run_success{dag_id="meetinity_daily_ingestion"}[2h]) == 0
+                for: 15m
+                labels:
+                  severity: critical
+                  team: data-platform
+                annotations:
+                  summary: Daily ingestion DAG has not succeeded within the last 2 hours
+                  description: The meetinity_daily_ingestion DAG has not completed successfully within the freshness SLO window.
+              - alert: DbtBuildFailures
+                expr: increase(dbt_build_status_total{status="error"}[1h]) > 0
+                for: 5m
+                labels:
+                  severity: high
+                  team: data-platform
+                annotations:
+                  summary: dbt build failures detected
+                  description: dbt builds for Meetinity analytics models are failing. Review the dbt Cloud or CI logs.
     additionalScrapeConfigs:
       - job_name: kubernetes-pods
         kubernetes_sd_configs:

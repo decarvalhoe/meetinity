@@ -212,6 +212,44 @@ variable "search_domain_config" {
   }
 }
 
+variable "data_lake_config" {
+  description = "Configuration for the object-store data lake."
+  type = object({
+    enabled                                = bool
+    name                                   = string
+    bucket_name                            = optional(string)
+    force_destroy                          = optional(bool, false)
+    versioning_enabled                     = optional(bool, true)
+    create_kms_key                         = optional(bool, true)
+    kms_key_arn                            = optional(string)
+    glue_database_name                     = string
+    crawler_name                           = string
+    crawler_role_name                      = optional(string)
+    crawler_schedule                       = optional(string)
+    crawler_s3_target_path                 = optional(string)
+    athena_workgroup_name                  = string
+    athena_output_prefix                   = optional(string, "athena/results/")
+    athena_enforce_bucket_owner_full_control = optional(bool, true)
+  })
+  default = {
+    enabled                                = true
+    name                                   = "data-lake"
+    bucket_name                            = null
+    force_destroy                          = false
+    versioning_enabled                     = true
+    create_kms_key                         = true
+    kms_key_arn                            = null
+    glue_database_name                     = "meetinity_data_lake"
+    crawler_name                           = "meetinity-data-lake-crawler"
+    crawler_role_name                      = null
+    crawler_schedule                       = "cron(0 1 * * ? *)"
+    crawler_s3_target_path                 = null
+    athena_workgroup_name                  = "meetinity-data-lake"
+    athena_output_prefix                   = "athena/results/"
+    athena_enforce_bucket_owner_full_control = true
+  }
+}
+
 variable "analytics_warehouse_config" {
   description = "Configuration for the analytics data warehouse cluster."
   type = object({
@@ -225,6 +263,7 @@ variable "analytics_warehouse_config" {
     snapshot_retention         = number
     maintenance_window         = string
     allowed_security_group_ids = list(string)
+    data_lake_bucket_arns      = optional(list(string), [])
     kms_key_id                 = optional(string)
   })
   default = {
@@ -238,6 +277,7 @@ variable "analytics_warehouse_config" {
     snapshot_retention         = 7
     maintenance_window         = "sun:05:00-sun:05:30"
     allowed_security_group_ids = []
+    data_lake_bucket_arns      = []
     kms_key_id                 = null
   }
 }

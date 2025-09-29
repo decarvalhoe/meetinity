@@ -1,0 +1,7 @@
+event_id,user_id,event_type,occurred_at
+100,1,session_start,2024-01-05 10:00:00
+101,1,session_end,2024-01-05 11:00:00
+102,2,session_start,2024-01-05 12:00:00
+103,3,session_start,2024-01-05 13:00:00
+104,3,purchase,2024-01-05 13:05:00
+105,4,session_start,2024-01-05 14:00:00

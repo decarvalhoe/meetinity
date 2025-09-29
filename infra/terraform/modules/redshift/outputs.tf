@@ -28,3 +28,9 @@ output "master_password" {
   description = "Generated master password"
   sensitive   = true
 }
+
+output "data_access_role_arn" {
+  value       = aws_iam_role.data_access.arn
+  description = "IAM role ARN granting the warehouse access to the data lake"
+}
+

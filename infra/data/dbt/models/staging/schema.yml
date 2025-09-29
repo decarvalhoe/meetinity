@@ -1,0 +1,33 @@
+version: 2
+
+models:
+  - name: stg_users
+    description: Cleaned representation of application users sourced from raw extracts.
+    columns:
+      - name: user_id
+        description: Primary identifier for the user.
+        tests:
+          - not_null
+          - unique
+      - name: country
+        description: ISO country code associated with the user profile.
+      - name: created_at
+        description: Date the user registered with the platform.
+      - name: is_recent
+        description: Flag indicating whether the user joined within the last 30 days.
+  - name: stg_events
+    description: Normalised event feed emitted by client applications and partners.
+    columns:
+      - name: event_id
+        tests:
+          - not_null
+          - unique
+      - name: user_id
+        tests:
+          - not_null
+      - name: event_type
+        description: Canonical event type slug.
+      - name: occurred_at
+        description: Timestamp when the event occurred in UTC.
+      - name: occurred_on
+        description: Event date bucket used for partition pruning.
