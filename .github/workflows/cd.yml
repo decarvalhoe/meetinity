@@ -16,7 +16,7 @@ env:
   CHART_PATH: infra/helm/meetinity
   VALUES_PATH: infra/helm/meetinity/values
   K8S_ENV_PATH: infra/kubernetes/environments
-  SERVICES: api-gateway user-service matching-service event-service
+  SERVICES: api-gateway user-service matching-service event-service messaging-service
 
 jobs:
   build:
@@ -36,6 +36,8 @@ jobs:
             context: services/matching-service
           - name: event-service
             context: services/event-service
+          - name: messaging-service
+            context: services/messaging-service
     outputs:
       release_version: ${{ steps.meta.outputs.release_version }}
       short_sha: ${{ steps.meta.outputs.short_sha }}

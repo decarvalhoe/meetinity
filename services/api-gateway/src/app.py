@@ -544,6 +544,13 @@ def create_app() -> Flask:
     app.config["MATCHING_SERVICE_STATIC_INSTANCES"] = _get_env(
         "MATCHING_SERVICE_STATIC_INSTANCES", ""
     ) or ""
+    app.config["MESSAGING_SERVICE_URL"] = _get_env("MESSAGING_SERVICE_URL", "") or ""
+    app.config["MESSAGING_SERVICE_NAME"] = _get_env(
+        "MESSAGING_SERVICE_NAME", "messaging-service"
+    ) or "messaging-service"
+    app.config["MESSAGING_SERVICE_STATIC_INSTANCES"] = _get_env(
+        "MESSAGING_SERVICE_STATIC_INSTANCES", ""
+    ) or ""
     app.config["SERVICE_DISCOVERY_BACKEND"] = _get_env(
         "SERVICE_DISCOVERY_BACKEND", "static"
     ) or "static"
@@ -557,6 +564,7 @@ def create_app() -> Flask:
     app.config["RATE_LIMIT_AUTH"] = _get_env("RATE_LIMIT_AUTH", "10/minute") or "10/minute"
     app.config["RATE_LIMIT_EVENTS"] = _get_env("RATE_LIMIT_EVENTS", "10/minute") or "10/minute"
     app.config["RATE_LIMIT_MATCHING"] = _get_env("RATE_LIMIT_MATCHING", "10/minute") or "10/minute"
+    app.config["RATE_LIMIT_MESSAGING"] = _get_env("RATE_LIMIT_MESSAGING", "10/minute") or "10/minute"
     app.config["API_KEYS"] = api_keys_raw
     app.config["API_KEY_HEADER"] = _get_env("API_KEY_HEADER", "X-API-Key") or "X-API-Key"
     app.config["API_KEY_SALT"] = _get_env("API_KEY_SALT", "") or ""

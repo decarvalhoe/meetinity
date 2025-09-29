@@ -28,6 +28,7 @@ from ..middleware.jwt import require_jwt
 from ..services.registry import (
     EVENT_SERVICE_CONFIG,
     MATCHING_SERVICE_CONFIG,
+    MESSAGING_SERVICE_CONFIG,
     USER_SERVICE_CONFIG,
     ServiceInstance,
     ServiceRegistry,
@@ -109,6 +110,18 @@ PROXY_ROUTE_DEFINITIONS: tuple[ProxyRouteDefinition, ...] = (
         summary="Matching proxy",
         description="Proxy matchmaking requests to the upstream matching service.",
         tags=("Matching",),
+    ),
+    ProxyRouteDefinition(
+        name="messaging",
+        gateway_path="/api/conversations",
+        upstream_prefix="conversations",
+        methods=("GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"),
+        upstream_service=MESSAGING_SERVICE_CONFIG,
+        requires_jwt=True,
+        rate_limit_config="RATE_LIMIT_MESSAGING",
+        summary="Messaging proxy",
+        description="Expose messaging endpoints for authenticated users.",
+        tags=("Messages",),
     ),
 )
 
