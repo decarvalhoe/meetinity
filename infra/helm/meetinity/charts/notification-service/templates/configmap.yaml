@@ -1,0 +1,9 @@
+{{- if .Values.configMaps }}
+{{- $root := . }}
+{{- $baseLabels := (include "notification-service.labels" $root | fromYaml) }}
+{{- range $cm := .Values.configMaps }}
+{{- $labels := merge (dict) $baseLabels ($cm.labels | default (dict)) }}
+{{ include "common.configmap" (dict "name" (printf "%s-%s" (include "notification-service.fullname" $root) $cm.name) "labels" $labels "annotations" ($cm.annotations | default (dict)) "data" ($cm.data | default (dict)) "binaryData" ($cm.binaryData | default (dict))) }}
+---
+{{- end }}
+{{- end }}

@@ -87,6 +87,7 @@ The project uses a modern **microservices architecture**. All backend services n
 - **User Service** (`services/user-service`): OAuth authentication and profile management
 - **Event Service** (`services/event-service`): Event creation, discovery, and registration
 - **Messaging Service** (`services/messaging-service`): Real-time chat backend exposing REST and WebSocket endpoints
+- **Notification Service** (`services/notification-service`): Multi-channel alerts with preference-aware routing
 - **Matching Service** (`services/matching-service`): Professional matching algorithms and swipe functionality
 - **Mobile App**: React 18 with TypeScript and Vite
 - **Admin Portal**: React-based administration interface
@@ -113,6 +114,7 @@ Our infrastructure baseline is now fully documented and automated:
 | **Event Service** | `services/event-service` | 70% – Event CRUD, registrations, and Kafka notifications available |
 | **Matching Service** | `services/matching-service` | 35% – Matching logic prototype, requires real-time data sync |
 | **Messaging Service** | `services/messaging-service` | 55% – Messaging backend live, awaiting client rollout |
+| **Notification Service** | `services/notification-service` | 40% – Notification orchestration scaffolded, awaiting channel adapters |
 | **Mobile App** | External repo `meetinity-mobile-app` | 70% – Authentication and discovery UI shipped |
 | **Admin Portal** | External repo `meetinity-admin-portal` | 60% – User management complete |
 

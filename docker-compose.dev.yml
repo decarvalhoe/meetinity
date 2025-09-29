@@ -74,6 +74,18 @@ services:
     networks:
       - meetinity-net
 
+  redis:
+    image: redis:7-alpine
+    container_name: meetinity-redis
+    restart: unless-stopped
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    command: ["redis-server", "--save", "60", "1000", "--loglevel", "warning"]
+    volumes:
+      - redis-data:/data
+    networks:
+      - meetinity-net
+
   wiremock:
     image: wiremock/wiremock:3.3.1
     container_name: meetinity-wiremock
@@ -234,6 +246,40 @@ services:
     networks:
       - meetinity-net
 
+  notification-service:
+    build:
+      context: ./services/notification-service
+      dockerfile: Dockerfile
+    container_name: meetinity-notification-service
+    restart: unless-stopped
+    env_file:
+      - .env.dev
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    ports:
+      - "${NOTIFICATION_SERVICE_PORT:-8086}:8080"
+    environment:
+      FLASK_APP: src.main:create_app
+      FLASK_RUN_HOST: 0.0.0.0
+      FLASK_RUN_PORT: 8080
+      FLASK_DEBUG: "1"
+      DATABASE_URL: postgresql+psycopg2://${POSTGRES_USER:-meetinity}:${POSTGRES_PASSWORD:-meetinity}@postgres:5432/${POSTGRES_DB:-meetinity}
+      REDIS_URL: redis://redis:6379/0
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      KAFKA_NOTIFICATION_TOPIC: notifications.dispatch
+      PYTHONUNBUFFERED: "1"
+    command: >
+      sh -c "flask run --debug --host=0.0.0.0 --port 8080"
+    volumes:
+      - ./services/notification-service:/app
+    networks:
+      - meetinity-net
+
   seed-data:
     image: postgres:15
     depends_on:
@@ -256,6 +302,7 @@ volumes:
   postgres-data:
   kafka-data:
   zookeeper-data:
+  redis-data:
 
 networks:
   meetinity-net:

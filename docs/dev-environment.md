@@ -23,6 +23,7 @@ Le fichier `docker-compose.dev.yml` construit directement les microservices depu
 │   ├── event-service/
 │   ├── matching-service/
 │   ├── messaging-service/
+│   ├── notification-service/
 │   └── user-service/
 ├── infra/
 ├── scripts/
@@ -54,6 +55,10 @@ USER_SERVICE_PORT=8081
 MATCHING_SERVICE_PORT=8082
 EVENT_SERVICE_PORT=8083
 MESSAGING_SERVICE_PORT=8084
+NOTIFICATION_SERVICE_PORT=8086
+
+# Redis
+REDIS_PORT=6379
 ```
 
 Les microservices peuvent nécessiter des variables supplémentaires (clés OAuth, secrets JWT, etc.). Référez-vous aux README
@@ -87,7 +92,9 @@ docker compose --env-file .env.dev -f docker-compose.dev.yml down --remove-orpha
 | Matching Service         | 8082       | Algorithmes de matching et recommandations                  |
 | Event Service            | 8083       | Gestion des événements et inscriptions                      |
 | Messaging Service        | 8084       | Backend REST/WebSocket pour la messagerie                   |
+| Notification Service     | 8086       | Orchestrateur multi-canal avec préférences et suivi         |
 | PostgreSQL               | 5432       | Base de données relationnelle partagée                      |
+| Redis                    | 6379       | Cache clé-valeur pour les préférences et sessions           |
 | Kafka                    | 9092       | Bus de messages pour la communication asynchrone            |
 | Kafka UI (optionnel)     | 8085       | Interface web pour visualiser les topics Kafka              |
 
@@ -114,13 +121,13 @@ Modifiez/ajoutez vos mappings puis relancez le conteneur WireMock (`docker compo
 
 ## Hot reload et debug
 
-Les services Flask (`api-gateway`, `user-service`, `matching-service`, `event-service`, `messaging-service`) démarrent désormais avec `flask run --debug` dans Docker. Les volumes `./services/*:/app` sont montés en écriture : chaque sauvegarde locale redémarre automatiquement l'application grâce au reloader intégré.
+Les services Flask (`api-gateway`, `user-service`, `matching-service`, `event-service`, `messaging-service`, `notification-service`) démarrent désormais avec `flask run --debug` dans Docker. Les volumes `./services/*:/app` sont montés en écriture : chaque sauvegarde locale redémarre automatiquement l'application grâce au reloader intégré.
 
 Commandes pratiques :
 
 ```bash
 # démarrer seulement les services applicatifs avec hot reload
-docker compose --env-file .env.dev -f docker-compose.dev.yml up api-gateway user-service matching-service event-service messaging-service
+docker compose --env-file .env.dev -f docker-compose.dev.yml up api-gateway user-service matching-service event-service messaging-service notification-service
 
 # attacher un shell interactif pour debugger
 docker compose exec user-service flask shell

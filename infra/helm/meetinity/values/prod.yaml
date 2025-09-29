@@ -274,3 +274,46 @@ event-service:
           type: Opaque
           data:
             EVENT_CATALOG_URL: '{{ .data.catalog_url }}'
+
+notification-service:
+  environment: prod
+  domain: meetinity.com
+  replicaCount: 3
+  autoscaling:
+    minReplicas: 3
+    maxReplicas: 6
+    metrics:
+      - type: Resource
+        resource:
+          name: cpu
+          target:
+            type: Utilization
+            averageUtilization: 50
+      - type: Resource
+        resource:
+          name: memory
+          target:
+            type: Utilization
+            averageUtilization: 60
+  resources:
+    requests:
+      cpu: 250m
+      memory: 320Mi
+    limits:
+      cpu: 500m
+      memory: 640Mi
+  podDisruptionBudget:
+    minAvailable: 2
+  vaultSecrets:
+    - name: notification-service-env
+      path: kv/data/prod/notification-service/app
+      secretStoreRef:
+        name: vault-prod
+      target:
+        template:
+          type: Opaque
+          data:
+            DATABASE_URL: '{{ .data.database_url | default "" }}'
+            REDIS_URL: '{{ .data.redis_url | default "redis://redis:6379/0" }}'
+            KAFKA_BOOTSTRAP_SERVERS: '{{ .data.kafka_bootstrap | default "kafka:9092" }}'
+            KAFKA_NOTIFICATION_TOPIC: '{{ .data.kafka_topic | default "notifications.dispatch" }}'
