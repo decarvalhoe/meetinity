@@ -16,6 +16,30 @@ This service powers professional event management on the Meetinity platform. It 
 - Automatic timestamps and status tracking for approvals
 - Service layer encapsulating business logic, including series management
 
+## Registration & Attendance API
+
+The `registrations` blueprint exposes the event participation workflows used by the
+Meetinity product and OpenAPI contract:
+
+- `POST /events/<event_id>/join` &ndash; register an attendee. Returns the registration
+  payload when confirmed or a waitlist entry with `202 Accepted` when the event is full.
+- `DELETE /events/<event_id>/join?registration_id=<id>` &ndash; cancel a registration and
+  automatically promote waitlisted attendees when capacity becomes available.
+- `GET /events/<event_id>/registrations` &ndash; list confirmed registrations with their
+  status, metadata and check-in token.
+- `GET /events/<event_id>/waitlist` &ndash; inspect the waitlist order for the event.
+- `POST /events/<event_id>/waitlist/promote` &ndash; manually trigger waitlist promotion
+  (useful for admins or scheduled jobs).
+- `GET /events/<event_id>/attendance` &ndash; retrieve attendance records including
+  check-in timestamps.
+- `POST /events/<event_id>/attendance` &ndash; detect no-shows and apply penalties after
+  an event has passed.
+- `POST /check-in/<token>` &ndash; validate a check-in token (QR code) and mark the
+  attendee as present.
+
+These routes power the registration flows in the service tests and the aggregated
+OpenAPI specification located at `contracts/openapi.yaml`.
+
 ## Project Layout
 
 ```
