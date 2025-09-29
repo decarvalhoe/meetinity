@@ -90,6 +90,21 @@ output "redis_auth_token" {
   sensitive   = true
 }
 
+output "analytics_warehouse_endpoint" {
+  description = "Endpoint of the analytics data warehouse."
+  value       = length(module.analytics_warehouse) > 0 ? module.analytics_warehouse[0].endpoint : null
+}
+
+output "analytics_warehouse_port" {
+  description = "Port exposed by the analytics data warehouse."
+  value       = length(module.analytics_warehouse) > 0 ? module.analytics_warehouse[0].port : null
+}
+
+output "analytics_warehouse_database" {
+  description = "Default database name configured for the analytics warehouse."
+  value       = length(module.analytics_warehouse) > 0 ? module.analytics_warehouse[0].database_name : null
+}
+
 output "static_assets_bucket_name" {
   description = "Name of the S3 bucket hosting static assets."
   value       = module.static_assets.bucket_name
