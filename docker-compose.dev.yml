@@ -205,6 +205,35 @@ services:
     networks:
       - meetinity-net
 
+  messaging-service:
+    build:
+      context: ./services/messaging-service
+      dockerfile: Dockerfile
+    container_name: meetinity-messaging-service
+    restart: unless-stopped
+    env_file:
+      - .env.dev
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    ports:
+      - "${MESSAGING_SERVICE_PORT:-8084}:8080"
+    environment:
+      FLASK_APP: src.main:create_app
+      FLASK_RUN_HOST: 0.0.0.0
+      FLASK_RUN_PORT: 8080
+      FLASK_DEBUG: "1"
+      DATABASE_URL: postgresql+psycopg2://${POSTGRES_USER:-meetinity}:${POSTGRES_PASSWORD:-meetinity}@postgres:5432/${POSTGRES_DB:-meetinity}
+      PYTHONUNBUFFERED: "1"
+    command: >
+      sh -c "flask run --debug --host=0.0.0.0 --port 8080"
+    volumes:
+      - ./services/messaging-service:/app
+    networks:
+      - meetinity-net
+
   seed-data:
     image: postgres:15
     depends_on:

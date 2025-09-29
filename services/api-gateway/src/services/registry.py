@@ -39,11 +39,13 @@ class UpstreamServiceConfig:
 USER_SERVICE_CONFIG = UpstreamServiceConfig("USER_SERVICE", "user-service")
 EVENT_SERVICE_CONFIG = UpstreamServiceConfig("EVENT_SERVICE", "event-service")
 MATCHING_SERVICE_CONFIG = UpstreamServiceConfig("MATCHING_SERVICE", "matching-service")
+MESSAGING_SERVICE_CONFIG = UpstreamServiceConfig("MESSAGING_SERVICE", "messaging-service")
 
 DEFAULT_UPSTREAM_SERVICES: Tuple[UpstreamServiceConfig, ...] = (
     USER_SERVICE_CONFIG,
     EVENT_SERVICE_CONFIG,
     MATCHING_SERVICE_CONFIG,
+    MESSAGING_SERVICE_CONFIG,
 )
 
 
