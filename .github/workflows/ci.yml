@@ -155,6 +155,47 @@ jobs:
       - name: Run unit tests
         run: pytest -vv
 
+  payment-service-tests:
+    name: Payment Service Tests
+    needs: build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: services/payment-service
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt pytest
+
+      - name: Run pytest
+        run: pytest -vv
+
+  payment-contract-tests:
+    name: Payment Contract Tests
+    needs: payment-service-tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install -r services/payment-service/requirements.txt pytest
+
+      - name: Run contract tests
+        run: pytest tests/contracts -k payment -vv
+
   security_scan:
     name: Security Scan
     needs: build

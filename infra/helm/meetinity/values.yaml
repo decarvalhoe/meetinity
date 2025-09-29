@@ -229,3 +229,35 @@ shared:
         creationPolicy: Owner
         template:
           type: Opaque
+    - name: payment-service
+      path: "kv/data/{{ .Values.global.environment }}/services/payment-service"
+      target:
+        name: payment-service-secrets
+        creationPolicy: Owner
+        template:
+          type: Opaque
+      data:
+        - secretKey: STRIPE__API_KEY
+          remoteRef:
+            key: "kv/data/{{ .Values.global.environment }}/services/payment-service"
+            property: stripe_api_key
+        - secretKey: STRIPE__WEBHOOK_SECRET
+          remoteRef:
+            key: "kv/data/{{ .Values.global.environment }}/services/payment-service"
+            property: stripe_webhook_secret
+        - secretKey: PAYPAL__API_KEY
+          remoteRef:
+            key: "kv/data/{{ .Values.global.environment }}/services/payment-service"
+            property: paypal_api_key
+        - secretKey: PAYPAL__WEBHOOK_SECRET
+          remoteRef:
+            key: "kv/data/{{ .Values.global.environment }}/services/payment-service"
+            property: paypal_webhook_secret
+        - secretKey: PAYPAL__CLIENT_ID
+          remoteRef:
+            key: "kv/data/{{ .Values.global.environment }}/services/payment-service"
+            property: paypal_client_id
+        - secretKey: PAYPAL__CLIENT_SECRET
+          remoteRef:
+            key: "kv/data/{{ .Values.global.environment }}/services/payment-service"
+            property: paypal_client_secret

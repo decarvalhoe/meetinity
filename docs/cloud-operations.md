@@ -64,6 +64,49 @@ Cost governance leverages AWS Budgets. When `cost_monitoring.enabled` is true, T
 - Adjust the monthly limit (`cost_monitoring.budget_limit`) in environment-specific `.tfvars` files as the footprint grows.
 - Track anomalies from Cost Explorer within the same budget view to correlate spikes with deployments.
 
+## Payment Service Operations
+
+The payment service relies on External Secrets to hydrate provider credentials and on API Gateway routes for Stripe and PayPal
+webhooks.
+
+**Secret reconciliation**
+
+1. Confirm Vault paths exported in the Terraform output `payment_service_vault_paths` match the desired secret structure.
+2. Verify the ExternalSecret `payment-service-secrets` is healthy:
+   ```bash
+   kubectl get externalsecret payment-service-secrets -n payments -o yaml
+   ```
+3. To force a refresh after rotating credentials, annotate the ExternalSecret:
+   ```bash
+   kubectl annotate externalsecret payment-service-secrets external-secrets.io/refresh-trigger=$(date +%s) -n payments --overwrite
+   ```
+4. Restart the deployment to pick up the new environment variables:
+   ```bash
+   kubectl rollout restart deploy/payment-service -n payments
+   ```
+
+**Webhook verification**
+
+1. Retrieve the expected callback URLs from the Terraform output `payment_service_webhook_targets`.
+2. In Stripe/PayPal dashboards, ensure the webhook endpoints are subscribed to invoice, subscription, and refund events.
+3. Run the CI contract tests manually when needed:
+   ```bash
+   pytest tests/contracts -k payment --maxfail=1 -vv
+   ```
+4. For sandbox validation, execute the service tests directly:
+   ```bash
+   pushd services/payment-service
+   pytest -m "not slow" -vv
+   popd
+   ```
+
+**Incident recovery**
+
+- Use the audit log stream (`payment-service` logger in the central log system) to confirm whether requests reached the service.
+- Replay failed refunds by POSTing to `/payments/refunds` with the previously stored payload. The audit log contains correlation
+  IDs in case of provider timeouts.
+- Coordinate with finance for manual adjustments when the provider rejects a request due to idempotency conflicts.
+
 ## Analytics Warehouse Operations
 
 The Terraform stack provisions an optional Amazon Redshift cluster through the

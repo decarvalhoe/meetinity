@@ -139,3 +139,13 @@ output "cost_budget_arn" {
   description = "ARN of the AWS Budgets resource tracking monthly spend."
   value       = module.cost_monitoring.budget_arn
 }
+
+output "payment_service_webhook_targets" {
+  description = "Configured webhook targets for the payment service."
+  value       = local.payment_service_webhooks
+}
+
+output "payment_service_vault_paths" {
+  description = "Vault paths used by External Secrets for payment provider credentials."
+  value       = local.payment_service_vault_paths
+}

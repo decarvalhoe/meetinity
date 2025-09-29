@@ -41,6 +41,7 @@ EVENT_SERVICE_CONFIG = UpstreamServiceConfig("EVENT_SERVICE", "event-service")
 MATCHING_SERVICE_CONFIG = UpstreamServiceConfig("MATCHING_SERVICE", "matching-service")
 MESSAGING_SERVICE_CONFIG = UpstreamServiceConfig("MESSAGING_SERVICE", "messaging-service")
 ANALYTICS_SERVICE_CONFIG = UpstreamServiceConfig("ANALYTICS_SERVICE", "analytics-service")
+PAYMENT_SERVICE_CONFIG = UpstreamServiceConfig("PAYMENT_SERVICE", "payment-service")
 
 DEFAULT_UPSTREAM_SERVICES: Tuple[UpstreamServiceConfig, ...] = (
     USER_SERVICE_CONFIG,
@@ -48,6 +49,7 @@ DEFAULT_UPSTREAM_SERVICES: Tuple[UpstreamServiceConfig, ...] = (
     MATCHING_SERVICE_CONFIG,
     MESSAGING_SERVICE_CONFIG,
     ANALYTICS_SERVICE_CONFIG,
+    PAYMENT_SERVICE_CONFIG,
 )
 
 
