@@ -364,3 +364,51 @@ moderation-service:
             KAFKA_BOOTSTRAP_SERVERS: '{{ .data.kafka_bootstrap | default "kafka:9092" }}'
             KAFKA_MODERATION_TOPIC: '{{ .data.kafka_topic | default "moderation.events" }}'
             ML_CLASSIFIER_URL: '{{ .data.ml_classifier_url | default "" }}'
+
+search-service:
+  environment: staging
+  domain: staging.meetinity.com
+  replicaCount: 2
+  autoscaling:
+    minReplicas: 2
+    maxReplicas: 4
+    metrics:
+      - type: Resource
+        resource:
+          name: cpu
+          target:
+            type: Utilization
+            averageUtilization: 55
+      - type: Resource
+        resource:
+          name: memory
+          target:
+            type: Utilization
+            averageUtilization: 65
+  resources:
+    requests:
+      cpu: 200m
+      memory: 384Mi
+    limits:
+      cpu: 500m
+      memory: 768Mi
+  podDisruptionBudget:
+    minAvailable: 1
+  env:
+    - name: SEARCH_NODES
+      value: https://search.staging.meetinity.com
+    - name: SEARCH_VERIFY_CERTS
+      value: "1"
+    - name: SEARCH_TIMEOUT
+      value: "10"
+  vaultSecrets:
+    - name: search-service-opensearch
+      path: kv/data/staging/search-service/opensearch
+      secretStoreRef:
+        name: vault-staging
+      target:
+        template:
+          type: Opaque
+          data:
+            SEARCH_USERNAME: '{{ .data.username | default "" }}'
+            SEARCH_PASSWORD: '{{ .data.password | default "" }}'

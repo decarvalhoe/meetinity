@@ -90,6 +90,21 @@ output "redis_auth_token" {
   sensitive   = true
 }
 
+output "search_domain_endpoint" {
+  description = "HTTPS endpoint for the managed search cluster."
+  value       = module.search.domain_endpoint
+}
+
+output "search_domain_arn" {
+  description = "ARN of the managed search cluster."
+  value       = module.search.domain_arn
+}
+
+output "search_security_group_id" {
+  description = "Security group guarding the search domain."
+  value       = module.search.security_group_id
+}
+
 output "analytics_warehouse_endpoint" {
   description = "Endpoint of the analytics data warehouse."
   value       = length(module.analytics_warehouse) > 0 ? module.analytics_warehouse[0].endpoint : null

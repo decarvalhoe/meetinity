@@ -1,0 +1,113 @@
+environment: dev
+domain: meetinity.com
+
+replicaCount: 2
+
+image:
+  repository: ghcr.io/meetinity/search-service
+  tag: "latest"
+  pullPolicy: IfNotPresent
+
+serviceAccount:
+  create: true
+  name: ""
+
+service:
+  type: ClusterIP
+  port: 8080
+
+ingress:
+  enabled: true
+  className: nginx
+  annotations: {}
+  subdomain: search
+  tlsSecretName: search-service-tls
+  paths:
+    - path: /
+      pathType: Prefix
+
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 5
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 65
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: 75
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 60
+      policies:
+        - type: Percent
+          value: 100
+          periodSeconds: 60
+    scaleDown:
+      stabilizationWindowSeconds: 300
+      policies:
+        - type: Percent
+          value: 100
+          periodSeconds: 300
+
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 1
+
+resources:
+  requests:
+    cpu: 150m
+    memory: 256Mi
+  limits:
+    cpu: 400m
+    memory: 512Mi
+
+vpa:
+  enabled: false
+  updatePolicy:
+    updateMode: "Off"
+  resourcePolicy:
+    containerPolicies:
+      - containerName: "*"
+        minAllowed:
+          cpu: 100m
+          memory: 256Mi
+        maxAllowed:
+          cpu: 1500m
+          memory: 2Gi
+
+env: []
+
+configMaps: []
+sealedSecrets: []
+vaultSecrets: []
+
+livenessProbe:
+  path: /health
+  port: http
+
+readinessProbe:
+  path: /health
+  port: http
+
+observability:
+  tracing:
+    enabled: true
+    serviceName: search-service
+    sampler:
+      type: parentbased_traceidratio
+      ratio: 0.25
+    exporter:
+      endpoint: "http://jaeger-collector.observability.svc.cluster.local:4317"
+      protocol: grpc
+    resourceAttributes:
+      service.domain: search
+    agent:
+      enabled: true
