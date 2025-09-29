@@ -63,6 +63,16 @@ pytest
 pytest --cov=src --cov=tests --cov-report=term-missing --cov-fail-under=90
 ```
 
+## Hot reload & debugging
+
+Running `make dev-up` in the monorepo now starts the service with `flask run --debug` (after `alembic upgrade head`). The `/app` directory is mounted from your host, so edits under `services/user-service` trigger an automatic restart inside the container. Handy commands:
+
+- `docker compose --env-file .env.dev -f docker-compose.dev.yml up user-service` – run only this service with hot reload.
+- `docker compose exec user-service flask shell` – open an interactive shell bound to the dev database.
+- `make dev-seed` – reload the demo dataset (users, events, registrations) once the stack is running.
+
+Disable the reloader temporarily by setting `FLASK_DEBUG=0` in `.env.dev` or overriding the environment when launching `docker compose run` if you need to attach a step debugger (e.g. `debugpy`).
+
 ## Running
 
 ```bash

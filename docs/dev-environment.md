@@ -85,6 +85,43 @@ docker compose --env-file .env.dev -f docker-compose.dev.yml down --remove-orpha
 | Kafka                    | 9092       | Bus de messages pour la communication asynchrone            |
 | Kafka UI (optionnel)     | 8085       | Interface web pour visualiser les topics Kafka              |
 
+## Données de démonstration
+
+Les microservices reposent sur des migrations Alembic. Une fois l'environnement démarré, lancez le job `seed-data` pour injecter un jeu de données cohérent (utilisateurs, événements et inscriptions) dans PostgreSQL :
+
+```bash
+make dev-seed
+# ou directement
+./scripts/dev/seed.sh
+```
+
+Le script applique d'abord les migrations `user-service` et `event-service` via `docker compose exec` puis déclenche le service Compose `seed-data` (profil `seed`). Celui-ci monte `scripts/dev/sql/seed.sql` dans un conteneur `postgres:15` éphémère qui exécute les `INSERT` idempotents. Vous pouvez relancer la commande autant de fois que nécessaire pour rafraîchir les données de test.
+
+## Mocks et dépendances externes
+
+`docker-compose.dev.yml` embarque un service [WireMock](https://wiremock.org/) exposé sur `http://localhost:${WIREMOCK_PORT:-8089}`. Les stubs sont versionnés dans `infra/mocks/wiremock` :
+
+- `mappings/` pour les routes (`health.json` propose un exemple de réponse JSON) ;
+- `__files/` (créez le dossier au besoin) pour les payloads plus volumineux.
+
+Modifiez/ajoutez vos mappings puis relancez le conteneur WireMock (`docker compose restart wiremock`) pour simuler vos dépendances SaaS sans accès externe.
+
+## Hot reload et debug
+
+Les services Flask (`api-gateway`, `user-service`, `matching-service`, `event-service`) démarrent désormais avec `flask run --debug` dans Docker. Les volumes `./services/*:/app` sont montés en écriture : chaque sauvegarde locale redémarre automatiquement l'application grâce au reloader intégré.
+
+Commandes pratiques :
+
+```bash
+# démarrer seulement les services applicatifs avec hot reload
+docker compose --env-file .env.dev -f docker-compose.dev.yml up api-gateway user-service matching-service event-service
+
+# attacher un shell interactif pour debugger
+docker compose exec user-service flask shell
+```
+
+Pour désactiver le reloader (ex. debug pas à pas), exportez `FLASK_DEBUG=0` dans `.env.dev` ou sur un `docker compose run`. Pensez aussi à activer le port de debuggage de votre IDE (ex. `debugpy`) en ajoutant le paquet à `requirements.txt` puis en démarrant l'agent depuis le conteneur.
+
 ## Dépannage
 
 - **Port déjà utilisé** : modifiez le port dans `.env.dev` ou adaptez `docker-compose.dev.yml`.
