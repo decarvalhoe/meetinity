@@ -107,6 +107,7 @@ jobs:
       VALUES_FILE: infra/helm/meetinity/values/dev.yaml
       ENVIRONMENT_KEY: dev
       K8S_MANIFEST: infra/kubernetes/environments/dev/namespace.yaml
+      DEPLOYMENT_STRATEGY: ${{ vars.DEV_DEPLOYMENT_STRATEGY || 'blueGreen' }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -138,23 +139,45 @@ jobs:
             --docker-password=${{ secrets.GHCR_READER_TOKEN }} \
             --dry-run=client -o yaml | kubectl apply -f -
 
-      - name: Deploy chart
+      - name: Deploy chart with blue/green strategy
         run: |
+          set -euo pipefail
           owner="${{ needs.build.outputs.owner }}"
           version="${{ needs.build.outputs.release_version }}"
+          strategy="${DEPLOYMENT_STRATEGY:-blueGreen}"
+
           extra_args=()
           for svc in $SERVICES; do
             extra_args+=(--set-string "${svc}.image.repository=${{ env.REGISTRY }}/$owner/${svc}")
             extra_args+=(--set-string "${svc}.image.tag=${version}")
           done
 
+          previous_revision=$(helm history "${RELEASE_NAME}" --namespace "${NAMESPACE}" 2>/dev/null \
+            | awk 'NR>1 && toupper($3)=="DEPLOYED" {rev=$1} END {print rev}')
+
+          rollback() {
+            if [ -n "$previous_revision" ]; then
+              echo "Triggering rollback to revision $previous_revision" >&2
+              helm rollback "${RELEASE_NAME}" "$previous_revision" --namespace "${NAMESPACE}" || true
+            else
+              echo "No successful revision found for rollback. Cleaning up failed release." >&2
+              helm uninstall "${RELEASE_NAME}" --namespace "${NAMESPACE}" || true
+            fi
+          }
+
+          trap 'rollback' ERR
+
           helm upgrade --install "${RELEASE_NAME}" "${{ env.CHART_PATH }}" \
             --namespace "${NAMESPACE}" \
             --values "${{ env.CHART_PATH }}/values.yaml" \
             --values "${VALUES_FILE}" \
             --set-string global.environment="${ENVIRONMENT_KEY}" \
+            --set-string global.rolloutStrategy="${strategy}" \
+            --set-string global.enableBlueGreen=true \
             "${extra_args[@]}" \
             --wait
+
+          trap - ERR
 
       - name: Wait for workloads
         run: |
@@ -182,6 +205,7 @@ jobs:
       VALUES_FILE: infra/helm/meetinity/values/staging.yaml
       ENVIRONMENT_KEY: staging
       K8S_MANIFEST: infra/kubernetes/environments/staging/namespace.yaml
+      DEPLOYMENT_STRATEGY: ${{ vars.STAGING_DEPLOYMENT_STRATEGY || 'blueGreen' }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -213,23 +237,45 @@ jobs:
             --docker-password=${{ secrets.GHCR_READER_TOKEN }} \
             --dry-run=client -o yaml | kubectl apply -f -
 
-      - name: Deploy chart
+      - name: Deploy chart with blue/green strategy
         run: |
+          set -euo pipefail
           owner="${{ needs.build.outputs.owner }}"
           version="${{ needs.build.outputs.release_version }}"
+          strategy="${DEPLOYMENT_STRATEGY:-blueGreen}"
+
           extra_args=()
           for svc in $SERVICES; do
             extra_args+=(--set-string "${svc}.image.repository=${{ env.REGISTRY }}/$owner/${svc}")
             extra_args+=(--set-string "${svc}.image.tag=${version}")
           done
 
+          previous_revision=$(helm history "${RELEASE_NAME}" --namespace "${NAMESPACE}" 2>/dev/null \
+            | awk 'NR>1 && toupper($3)=="DEPLOYED" {rev=$1} END {print rev}')
+
+          rollback() {
+            if [ -n "$previous_revision" ]; then
+              echo "Triggering rollback to revision $previous_revision" >&2
+              helm rollback "${RELEASE_NAME}" "$previous_revision" --namespace "${NAMESPACE}" || true
+            else
+              echo "No successful revision found for rollback. Cleaning up failed release." >&2
+              helm uninstall "${RELEASE_NAME}" --namespace "${NAMESPACE}" || true
+            fi
+          }
+
+          trap 'rollback' ERR
+
           helm upgrade --install "${RELEASE_NAME}" "${{ env.CHART_PATH }}" \
             --namespace "${NAMESPACE}" \
             --values "${{ env.CHART_PATH }}/values.yaml" \
             --values "${VALUES_FILE}" \
             --set-string global.environment="${ENVIRONMENT_KEY}" \
+            --set-string global.rolloutStrategy="${strategy}" \
+            --set-string global.enableBlueGreen=true \
             "${extra_args[@]}" \
             --wait
+
+          trap - ERR
 
       - name: Wait for workloads
         run: |
@@ -257,6 +303,7 @@ jobs:
       VALUES_FILE: infra/helm/meetinity/values/prod.yaml
       ENVIRONMENT_KEY: prod
       K8S_MANIFEST: infra/kubernetes/environments/prod/namespace.yaml
+      DEPLOYMENT_STRATEGY: ${{ vars.PROD_DEPLOYMENT_STRATEGY || 'blueGreen' }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -288,23 +335,45 @@ jobs:
             --docker-password=${{ secrets.GHCR_READER_TOKEN }} \
             --dry-run=client -o yaml | kubectl apply -f -
 
-      - name: Deploy chart
+      - name: Deploy chart with blue/green strategy
         run: |
+          set -euo pipefail
           owner="${{ needs.build.outputs.owner }}"
           version="${{ needs.build.outputs.release_version }}"
+          strategy="${DEPLOYMENT_STRATEGY:-blueGreen}"
+
           extra_args=()
           for svc in $SERVICES; do
             extra_args+=(--set-string "${svc}.image.repository=${{ env.REGISTRY }}/$owner/${svc}")
             extra_args+=(--set-string "${svc}.image.tag=${version}")
           done
 
+          previous_revision=$(helm history "${RELEASE_NAME}" --namespace "${NAMESPACE}" 2>/dev/null \
+            | awk 'NR>1 && toupper($3)=="DEPLOYED" {rev=$1} END {print rev}')
+
+          rollback() {
+            if [ -n "$previous_revision" ]; then
+              echo "Triggering rollback to revision $previous_revision" >&2
+              helm rollback "${RELEASE_NAME}" "$previous_revision" --namespace "${NAMESPACE}" || true
+            else
+              echo "No successful revision found for rollback. Cleaning up failed release." >&2
+              helm uninstall "${RELEASE_NAME}" --namespace "${NAMESPACE}" || true
+            fi
+          }
+
+          trap 'rollback' ERR
+
           helm upgrade --install "${RELEASE_NAME}" "${{ env.CHART_PATH }}" \
             --namespace "${NAMESPACE}" \
             --values "${{ env.CHART_PATH }}/values.yaml" \
             --values "${VALUES_FILE}" \
             --set-string global.environment="${ENVIRONMENT_KEY}" \
+            --set-string global.rolloutStrategy="${strategy}" \
+            --set-string global.enableBlueGreen=true \
             "${extra_args[@]}" \
             --wait
+
+          trap - ERR
 
       - name: Wait for workloads
         run: |
