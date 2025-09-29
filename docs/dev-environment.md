@@ -10,22 +10,26 @@ Avant de démarrer, assurez-vous de disposer des éléments suivants :
 - [Docker Desktop](https://www.docker.com/products/docker-desktop/) ou Docker Engine >= 24.
 - Le plugin **Docker Compose** (inclus avec Docker Desktop et disponible pour Docker Engine).
 - `make` pour utiliser les cibles fournies à la racine du dépôt.
-- Accès aux autres dépôts Meetinity (API Gateway et microservices) si vous souhaitez construire les images localement.
+- Aucun dépôt supplémentaire n'est requis : toutes les images se construisent à partir des dossiers `services/*` versionnés ici.
 
 ## Arborescence recommandée
 
-Le fichier `docker-compose.dev.yml` fait l'hypothèse que tous les dépôts se trouvent au même niveau. Exemple :
+Le fichier `docker-compose.dev.yml` construit directement les microservices depuis ce dépôt. Assurez-vous que la structure suivante est conservée :
 
 ```
-~/workspace/
-├── meetinity
-├── meetinity-api-gateway
-├── meetinity-user-service
-├── meetinity-matching-service
-├── meetinity-event-service
+~/workspace/meetinity
+├── services/
+│   ├── api-gateway/
+│   ├── event-service/
+│   ├── matching-service/
+│   ├── messaging-service/
+│   └── user-service/
+├── infra/
+├── scripts/
+└── docker-compose.dev.yml
 ```
 
-Adaptez les chemins de build dans `docker-compose.dev.yml` si votre organisation diffère.
+Si vous déplacez un service, mettez à jour la directive `context` correspondante dans `docker-compose.dev.yml`.
 
 ## Variables d'environnement
 
@@ -49,6 +53,7 @@ API_GATEWAY_PORT=8080
 USER_SERVICE_PORT=8081
 MATCHING_SERVICE_PORT=8082
 EVENT_SERVICE_PORT=8083
+MESSAGING_SERVICE_PORT=8084
 ```
 
 Les microservices peuvent nécessiter des variables supplémentaires (clés OAuth, secrets JWT, etc.). Référez-vous aux README
@@ -81,13 +86,14 @@ docker compose --env-file .env.dev -f docker-compose.dev.yml down --remove-orpha
 | User Service             | 8081       | Gestion des comptes, profils, authentification              |
 | Matching Service         | 8082       | Algorithmes de matching et recommandations                  |
 | Event Service            | 8083       | Gestion des événements et inscriptions                      |
+| Messaging Service        | 8084       | Backend REST/WebSocket pour la messagerie                   |
 | PostgreSQL               | 5432       | Base de données relationnelle partagée                      |
 | Kafka                    | 9092       | Bus de messages pour la communication asynchrone            |
 | Kafka UI (optionnel)     | 8085       | Interface web pour visualiser les topics Kafka              |
 
 ## Données de démonstration
 
-Les microservices reposent sur des migrations Alembic. Une fois l'environnement démarré, lancez le job `seed-data` pour injecter un jeu de données cohérent (utilisateurs, événements et inscriptions) dans PostgreSQL :
+Les microservices reposent sur des migrations Alembic. Une fois l'environnement démarré, lancez le job `seed-data` pour injecter un jeu de données cohérent (utilisateurs, événements, inscriptions et conversations de démonstration) dans PostgreSQL :
 
 ```bash
 make dev-seed
@@ -95,7 +101,7 @@ make dev-seed
 ./scripts/dev/seed.sh
 ```
 
-Le script applique d'abord les migrations `user-service` et `event-service` via `docker compose exec` puis déclenche le service Compose `seed-data` (profil `seed`). Celui-ci monte `scripts/dev/sql/seed.sql` dans un conteneur `postgres:15` éphémère qui exécute les `INSERT` idempotents. Vous pouvez relancer la commande autant de fois que nécessaire pour rafraîchir les données de test.
+Le script applique d'abord les migrations nécessaires (`services/user-service`, `services/event-service`, `services/messaging-service`) via `docker compose exec` puis déclenche le service Compose `seed-data` (profil `seed`). Celui-ci monte `scripts/dev/sql/seed.sql` dans un conteneur `postgres:15` éphémère qui exécute les `INSERT` idempotents. Vous pouvez relancer la commande autant de fois que nécessaire pour rafraîchir les données de test.
 
 ## Mocks et dépendances externes
 
@@ -108,13 +114,13 @@ Modifiez/ajoutez vos mappings puis relancez le conteneur WireMock (`docker compo
 
 ## Hot reload et debug
 
-Les services Flask (`api-gateway`, `user-service`, `matching-service`, `event-service`) démarrent désormais avec `flask run --debug` dans Docker. Les volumes `./services/*:/app` sont montés en écriture : chaque sauvegarde locale redémarre automatiquement l'application grâce au reloader intégré.
+Les services Flask (`api-gateway`, `user-service`, `matching-service`, `event-service`, `messaging-service`) démarrent désormais avec `flask run --debug` dans Docker. Les volumes `./services/*:/app` sont montés en écriture : chaque sauvegarde locale redémarre automatiquement l'application grâce au reloader intégré.
 
 Commandes pratiques :
 
 ```bash
 # démarrer seulement les services applicatifs avec hot reload
-docker compose --env-file .env.dev -f docker-compose.dev.yml up api-gateway user-service matching-service event-service
+docker compose --env-file .env.dev -f docker-compose.dev.yml up api-gateway user-service matching-service event-service messaging-service
 
 # attacher un shell interactif pour debugger
 docker compose exec user-service flask shell
