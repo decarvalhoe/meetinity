@@ -46,6 +46,21 @@ These alerts inherit existing routing through Alertmanager and surface issues in
 * Encryption defaults are enabled everywhere (S3, Athena outputs, Redshift), ensuring regulatory compliance without additional configuration.
 * Seeded dbt exposures document the downstream dashboard dependencies, forming the basis of a lightweight data catalog.
 
+## Master data synchronization
+The Master Data Service (MDS) centralizes canonical user and profile entities in PostgreSQL and propagates changes using two complementary mechanisms:
+
+1. **Curated Kafka topics** – `mds.canonical-users.v1` and `mds.canonical-profiles.v1` publish business-level change events with lineage snapshots for cache-driven consumers (user, search, notification services). Topics are compacted with 14-day retention to support replay without overwhelming storage.
+2. **Change Data Capture (CDC)** – Debezium connectors stream raw table mutations (`mds.canonical-users.cdc`, `mds.canonical-profiles.cdc`) for analytical and ML workloads that require full-fidelity history.
+
+Schema registry entries for these topics live under `contracts/kafka/master-data-service` and follow backward-transitive compatibility, enabling incremental evolution without breaking consumers. Downstream teams subscribe based on latency and fidelity requirements, with schemas embedded in automation tests to detect regressions.
+
+## Conflict resolution procedures
+
+* **Deterministic rules first** – Stable identifiers (email, phone) trigger automatic merges when confidence ≥ 0.95. Probabilistic scores between 0.75 and 0.94 create review tasks in `potential_duplicates` and emit moderation requests.
+* **Human-in-the-loop** – Moderators receive context (source payloads, lineage) to approve merges or dismiss conflicts. Decisions are published to `mds.merge-decisions.v1`, reprocessed by MDS ingestion workers, and audited with reviewer identity + timestamps.
+* **Lineage updates** – Every attribute change records provenance in `attribute_lineage`. Downstream caches rely on the `version` field in canonical profile events to refresh data and reconcile conflicting values.
+* **SLA monitoring** – Alerts fire if unresolved duplicates exceed thresholds or if merge decision SLAs are breached, ensuring conflicts do not linger.
+
 ## Operational playbook
 1. **Add new sources** by dropping landed files into the S3 raw prefix; the Glue crawler will detect partitions automatically.
 2. **Model data** by adding dbt seeds/models/tests and running `make ci` locally before pushing.

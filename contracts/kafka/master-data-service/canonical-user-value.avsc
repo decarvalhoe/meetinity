@@ -1,0 +1,23 @@
+{
+  "type": "record",
+  "name": "CanonicalUserValue",
+  "namespace": "com.meetinity.masterdata",
+  "doc": "Canonical user lifecycle event emitted by the Master Data Service.",
+  "fields": [
+    { "name": "canonical_user_id", "type": {"type": "string", "logicalType": "uuid"}, "doc": "Stable canonical identifier." },
+    { "name": "status", "type": { "type": "enum", "name": "CanonicalUserStatus", "symbols": ["active", "inactive", "merged", "deleted"] }, "doc": "Lifecycle status." },
+    { "name": "legacy_ids", "type": { "type": "map", "values": "string" }, "default": {}, "doc": "Source system identifiers keyed by system name." },
+    { "name": "primary_profile_version", "type": "long", "doc": "Version counter for the associated canonical profile." },
+    { "name": "lineage_snapshot", "type": ["null", {"type": "array", "items": {
+      "name": "LineageEntry",
+      "type": "record",
+      "fields": [
+        { "name": "attribute_path", "type": "string" },
+        { "name": "source_system", "type": "string" },
+        { "name": "source_record_id", "type": "string" },
+        { "name": "confidence", "type": "float", "default": 1.0 }
+      ]
+    }}], "default": null, "doc": "Optional lineage summary for consumers that do not subscribe to CDC." },
+    { "name": "updated_at", "type": {"type": "long", "logicalType": "timestamp-micros"} }
+  ]
+}

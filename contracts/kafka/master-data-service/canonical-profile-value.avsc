@@ -1,0 +1,27 @@
+{
+  "type": "record",
+  "name": "CanonicalProfileValue",
+  "namespace": "com.meetinity.masterdata",
+  "doc": "Normalized canonical profile event emitted after deduplication and merge.",
+  "fields": [
+    { "name": "canonical_user_id", "type": {"type": "string", "logicalType": "uuid"} },
+    { "name": "version", "type": "long", "doc": "Monotonically increasing version for optimistic concurrency." },
+    { "name": "full_name", "type": ["null", "string"], "default": null },
+    { "name": "email", "type": ["null", "string"], "default": null, "doc": "Lower-cased email." },
+    { "name": "phone_e164", "type": ["null", "string"], "default": null },
+    { "name": "country_code", "type": ["null", "string"], "default": null },
+    { "name": "preferences", "type": {"type": "map", "values": "string"}, "default": {}, "doc": "Flattened preference flags." },
+    { "name": "lineage", "type": {"type": "array", "items": {
+      "name": "ProfileLineageEntry",
+      "type": "record",
+      "fields": [
+        { "name": "attribute_path", "type": "string" },
+        { "name": "source_identity_id", "type": "long" },
+        { "name": "source_system", "type": "string" },
+        { "name": "confidence", "type": "float" },
+        { "name": "valid_from", "type": {"type": "long", "logicalType": "timestamp-micros"} }
+      ]
+    }}, "doc": "Lineage entries for the attributes in this event." },
+    { "name": "updated_at", "type": {"type": "long", "logicalType": "timestamp-micros"} }
+  ]
+}
