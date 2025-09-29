@@ -30,6 +30,16 @@ Key environment variables are documented in
 [`docs/operations/deployment.md`](docs/operations/deployment.md) and cover rate
 limits, upstream timeouts, caching, JWT secrets and OpenTelemetry exporters.
 
+## Hot reload & debugging
+
+When the gateway runs via `docker-compose.dev.yml` (`make dev-up`), the container starts `flask run --debug` so that code changes picked up under `./services/api-gateway` trigger an automatic reload. Useful commands from the monorepo root:
+
+- `docker compose --env-file .env.dev -f docker-compose.dev.yml up api-gateway` – start only the gateway with live reload.
+- `docker compose exec api-gateway flask shell` – open an interactive shell inside the running container.
+- `docker compose logs -f api-gateway` – follow live logs while editing code.
+
+To temporarily disable the reloader (e.g. when attaching a step debugger), export `FLASK_DEBUG=0` in `.env.dev` or override the environment when running `docker compose run`.
+
 ## Testing & quality gates
 
 | Type | Command | Notes |

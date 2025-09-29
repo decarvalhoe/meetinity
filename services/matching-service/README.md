@@ -54,6 +54,16 @@ The service currently provides mock data and basic functionality:
 
 The service will start on port 5004 by default.
 
+## Hot reload & debugging
+
+The Docker development stack (`make dev-up`) now launches the matching service with `flask run --debug` and mounts the local code under `services/matching-service` into the container. Useful workflows from the repository root:
+
+- `docker compose --env-file .env.dev -f docker-compose.dev.yml up matching-service` – start only this service with live reload.
+- `docker compose exec matching-service flask shell` – inspect in-memory data or tweak SQLite fixtures on the fly.
+- `docker compose logs -f matching-service` – follow logs while iterating on algorithms.
+
+Set `FLASK_DEBUG=0` in `.env.dev` when attaching a remote debugger or running blocking profiling sessions. The service defaults to an embedded SQLite database (`DATABASE_URI=sqlite:////tmp/matching.db` in Compose); adjust the variable if you need to persist the file elsewhere.
+
 ## Preference Model Training
 
 Swipe events and confirmed matches are recorded in the embedded SQLite database.

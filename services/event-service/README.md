@@ -99,6 +99,16 @@ pytest
 
 If `DATABASE_URL` is omitted, the application will assemble one from the `DB_*` variables. When none are set it uses a local SQLite database for convenience.
 
+## Hot reload & debugging
+
+In the Docker Compose dev environment the service boots with `alembic upgrade head` followed by `flask run --debug`. Source files under `services/event-service` are mounted into the container so code edits trigger immediate reloads. From the monorepo root you can:
+
+- `docker compose --env-file .env.dev -f docker-compose.dev.yml up event-service` – iterate on this service only.
+- `docker compose exec event-service flask shell` – inspect the ORM or run quick queries.
+- `make dev-seed` – refresh the demo events/registrations once the stack is up.
+
+Set `FLASK_DEBUG=0` in `.env.dev` or at runtime if you need to attach a debugger that should control the event loop manually.
+
 ## Development Tips
 
 - Use Alembic for all schema changes.
