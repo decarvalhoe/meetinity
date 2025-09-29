@@ -227,3 +227,96 @@ variable "shield_protection" {
     health_check_ids = []
   }
 }
+
+variable "static_assets" {
+  description = "Configuration for the static assets CDN."
+  type = object({
+    enabled               = bool
+    bucket_name           = optional(string)
+    domain_names          = optional(list(string), [])
+    price_class           = optional(string, "PriceClass_100")
+    default_ttl_seconds   = optional(number, 3600)
+    max_ttl_seconds       = optional(number, 86400)
+    min_ttl_seconds       = optional(number, 0)
+    compress              = optional(bool, true)
+    acm_certificate_arn   = optional(string)
+    logging_bucket        = optional(string)
+    minimum_protocol      = optional(string, "TLSv1.2_2021")
+  })
+  default = {
+    enabled = false
+  }
+}
+
+variable "alb_config" {
+  description = "Shared Application Load Balancer configuration."
+  type = object({
+    enabled            = bool
+    name               = optional(string)
+    internal           = optional(bool, false)
+    idle_timeout       = optional(number, 60)
+    certificate_arn    = optional(string)
+    subnets            = optional(list(string))
+    security_group_ids = optional(list(string), [])
+    http_port          = optional(number, 80)
+    https_port         = optional(number, 443)
+    health_check_path  = optional(string, "/healthz")
+  })
+  default = {
+    enabled = false
+  }
+}
+
+variable "nlb_config" {
+  description = "Shared Network Load Balancer configuration."
+  type = object({
+    enabled               = bool
+    name                  = optional(string)
+    internal              = optional(bool, true)
+    cross_zone            = optional(bool, true)
+    subnets               = optional(list(string))
+    tcp_port              = optional(number, 443)
+    health_check_protocol = optional(string, "TCP")
+    health_check_port     = optional(number)
+    health_check_interval = optional(number, 30)
+    healthy_threshold     = optional(number, 3)
+    unhealthy_threshold   = optional(number, 3)
+  })
+  default = {
+    enabled = false
+  }
+}
+
+variable "backup_config" {
+  description = "Configuration for the AWS Backup plan."
+  type = object({
+    enabled                = bool
+    vault_name             = optional(string)
+    plan_name              = optional(string)
+    schedule_expression    = optional(string, "cron(0 3 * * ? *)")
+    start_window_minutes   = optional(number, 60)
+    completion_window      = optional(number, 360)
+    cold_storage_after     = optional(number, 0)
+    delete_after           = optional(number, 35)
+    additional_resource_arns = optional(list(string), [])
+  })
+  default = {
+    enabled = false
+  }
+}
+
+variable "cost_monitoring" {
+  description = "Configuration for AWS cost monitoring."
+  type = object({
+    enabled             = bool
+    budget_limit        = optional(number)
+    budget_type         = optional(string, "COST")
+    time_unit           = optional(string, "MONTHLY")
+    limit_unit          = optional(string, "USD")
+    threshold_percent   = optional(number, 80)
+    notification_emails = optional(list(string), [])
+  })
+  default = {
+    enabled = false
+  }
+}

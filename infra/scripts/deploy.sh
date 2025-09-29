@@ -59,6 +59,14 @@ REDIS_READER_ENDPOINT="$(echo "$TF_OUTPUT_JSON" | jq -r '.redis_reader_endpoint.
 REDIS_PORT="$(echo "$TF_OUTPUT_JSON" | jq -r '.redis_port.value')"
 REDIS_AUTH_TOKEN="$(echo "$TF_OUTPUT_JSON" | jq -r '.redis_auth_token.value')"
 
+STATIC_ASSETS_BUCKET="$(echo "$TF_OUTPUT_JSON" | jq -r '.static_assets_bucket_name.value // empty')"
+STATIC_ASSETS_CDN_DOMAIN="$(echo "$TF_OUTPUT_JSON" | jq -r '.static_assets_cdn_domain.value // empty')"
+STATIC_ASSETS_DISTRIBUTION_ID="$(echo "$TF_OUTPUT_JSON" | jq -r '.static_assets_distribution_id.value // empty')"
+SHARED_ALB_DNS_NAME="$(echo "$TF_OUTPUT_JSON" | jq -r '.shared_alb_dns_name.value // empty')"
+SHARED_NLB_DNS_NAME="$(echo "$TF_OUTPUT_JSON" | jq -r '.shared_nlb_dns_name.value // empty')"
+BACKUP_VAULT_ARN="$(echo "$TF_OUTPUT_JSON" | jq -r '.aws_backup_vault_arn.value // empty')"
+COST_BUDGET_ARN="$(echo "$TF_OUTPUT_JSON" | jq -r '.cost_budget_arn.value // empty')"
+
 if [[ -z "$DATABASE_ENDPOINT" || "$DATABASE_ENDPOINT" == "null" ]]; then
   echo "Failed to obtain database endpoint from Terraform outputs" >&2
   exit 1
@@ -81,6 +89,31 @@ DATABASE_URL="postgresql://${DATABASE_USERNAME}:${DATABASE_PASSWORD}@${DATABASE_
 DATABASE_READER_URL="postgresql://${DATABASE_USERNAME}:${DATABASE_PASSWORD}@${DATABASE_READER_ENDPOINT}:${DATABASE_PORT}/${DATABASE_NAME}"
 REDIS_URL="rediss://default:${REDIS_AUTH_TOKEN}@${REDIS_PRIMARY_ENDPOINT}:${REDIS_PORT}"
 REDIS_READER_URL="rediss://default:${REDIS_AUTH_TOKEN}@${REDIS_READER_ENDPOINT}:${REDIS_PORT}"
+
+if [[ -n "$STATIC_ASSETS_CDN_DOMAIN" && "$STATIC_ASSETS_CDN_DOMAIN" != "null" ]]; then
+  log "Static assets distributed via https://${STATIC_ASSETS_CDN_DOMAIN}"
+  if [[ -n "$STATIC_ASSETS_DISTRIBUTION_ID" && "$STATIC_ASSETS_DISTRIBUTION_ID" != "null" ]]; then
+    log "CloudFront distribution ID: ${STATIC_ASSETS_DISTRIBUTION_ID}"
+  fi
+elif [[ -n "$STATIC_ASSETS_BUCKET" && "$STATIC_ASSETS_BUCKET" != "null" ]]; then
+  log "Static assets bucket provisioned: ${STATIC_ASSETS_BUCKET}"
+fi
+
+if [[ -n "$SHARED_ALB_DNS_NAME" && "$SHARED_ALB_DNS_NAME" != "null" ]]; then
+  log "Shared ALB available at ${SHARED_ALB_DNS_NAME}"
+fi
+
+if [[ -n "$SHARED_NLB_DNS_NAME" && "$SHARED_NLB_DNS_NAME" != "null" ]]; then
+  log "Shared NLB available at ${SHARED_NLB_DNS_NAME}"
+fi
+
+if [[ -n "$BACKUP_VAULT_ARN" && "$BACKUP_VAULT_ARN" != "null" ]]; then
+  log "AWS Backup vault configured (${BACKUP_VAULT_ARN})"
+fi
+
+if [[ -n "$COST_BUDGET_ARN" && "$COST_BUDGET_ARN" != "null" ]]; then
+  log "Monthly spend monitored via budget ${COST_BUDGET_ARN}"
+fi
 
 log "Updating kubeconfig"
 aws eks update-kubeconfig --name "$(cd "$TF_DIR" && terraform output -raw cluster_name)" --region "$AWS_REGION"

@@ -8,6 +8,10 @@ This Terraform configuration bootstraps the AWS infrastructure required to run t
 - **EKS module** – Provisions an EKS control plane, managed node group, core add-ons (VPC CNI, CoreDNS, kube-proxy, EBS CSI), and IAM roles for administrators and CSI drivers.
 - **Helm releases** – Installs cert-manager (with a default self-signed issuer) and the NGINX ingress controller, wiring a default TLS certificate for new ingresses.
 - **Kubernetes namespaces & storage classes** – Pre-creates logical namespaces for monitoring/security, the ingress and cert-manager system namespaces, and a default gp3 storage class backed by the AWS EBS CSI driver.
+- **Static assets CDN** – Optional S3 bucket plus CloudFront distribution for hosting static web resources with HTTPS enforcement.
+- **Shared load balancers** – Application and Network Load Balancers ready to accept targets from EKS/EC2 workloads.
+- **AWS Backup plan** – Daily backups for the Aurora PostgreSQL cluster with configurable retention windows.
+- **Cost monitoring** – Monthly AWS Budget capable of notifying stakeholders when spend exceeds thresholds.
 
 ## Usage
 
