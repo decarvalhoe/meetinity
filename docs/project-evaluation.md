@@ -14,20 +14,20 @@ Ces livrables rendent l'infrastructure testable et déployable de bout en bout, 
 
 ## 3. Lacunes Fonctionnelles
 
-Malgré ces avancées, plusieurs fonctionnalités essentielles à la valeur utilisateur restent incomplètes :
+Les dernières itérations ont étendu la Gateway aux flux événements et messagerie, livré la persistance des inscriptions et mis en service un backend de conversation. Les chantiers restants concernent désormais des points plus ciblés :
 
-- **Couverture de l'API Gateway** : La passerelle gère l'authentification mais n'expose pas encore l'ensemble des flux événements, matching et messagerie.
-- **Inscriptions aux événements** : Le `event-service` ne persiste pas les inscriptions et n'émet pas les notifications nécessaires.
+- **Couverture de l'API Gateway pour le matching** : Les routes matching reposent toujours sur des stubs et ne bénéficient pas encore du même niveau de journalisation/observabilité que les flux événements et messagerie.
 - **Synchronisation des données de matching** : Le `matching-service` fonctionne avec des données fictives et n'est pas raccordé aux profils ni aux disponibilités d'événements.
-- **Messagerie temps réel** : Aucun service de conversation n'est encore prêt, et les applications clientes n'ont pas de canal de communication actif.
+- **Expérience client temps réel** : Le backend de messagerie expose REST/WebSocket, mais les applications mobiles/web n'exploitent pas encore ces canaux et aucun mécanisme de notification push n'est en place.
+- **Vision transverse des engagements** : Les tableaux de bord d'analyse (taux de match, conversions post-événement) ne sont pas alimentés, limitant le pilotage produit.
 
-Ces éléments constituent le cœur de l'expérience Meetinity et expliquent la progression limitée sur les indicateurs métiers.
+Adresser ces éléments permettra de transformer les briques livrées en une expérience bout-en-bout mesurable.
 
 ## 4. Recommandations Prioritaires
 
-1. **Étendre la Gateway** pour couvrir les flux d'événements, de matching et de messagerie, avec journalisation et observabilité alignées sur les normes définies.
-2. **Finaliser les inscriptions** en connectant le `event-service` à PostgreSQL, en implémentant la logique de places disponibles et en publiant des événements de domaine.
-3. **Boucler la synchronisation Matching** en orchestrant les échanges entre `user-service`, `event-service` et `matching-service`, avec des jobs de mise à jour et une file d'attente évènementielle.
-4. **Livrer la Messagerie MVP** en choisissant la pile (ex. WebSocket + Redis streams), en exposant les endpoints REST/WebSocket, puis en intégrant le mobile et l'admin.
+1. **Parachever la Gateway** en ajoutant les routes de matching (REST/WebSocket) et les métriques dédiées afin d'obtenir une traçabilité homogène sur l'ensemble des parcours utilisateurs.
+2. **Industrialiser la synchronisation Matching** en orchestrant les échanges entre `user-service`, `event-service` et `matching-service`, avec des jobs de mise à jour et une file d'attente évènementielle.
+3. **Déployer l'expérience conversationnelle** en branchant les clients mobile/web sur le `messaging-service`, en gérant la présence et en introduisant les notifications push.
+4. **Outiller la mesure produit** via des pipelines analytiques (dbt/Kafka Connect) alimentant les indicateurs match -> message -> participation pour orienter la roadmap.
 
-La base d'infrastructure permet désormais de se concentrer exclusivement sur ces blocs fonctionnels pour atteindre un MVP cohérent.
+La base d'infrastructure permet désormais de concentrer l'effort sur ces blocs fonctionnels pour atteindre un MVP cohérent.

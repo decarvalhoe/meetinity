@@ -34,14 +34,14 @@ Meetinity is a comprehensive networking platform that allows you to:
 
 *Result*: Solid foundation with secure authentication and user management capabilities.
 
-### Phase 2: Event Management (🔄 In Progress - 35%)
+### Phase 2: Event Management (🔄 In Progress - 65%)
 **Objective**: Enable event creation, discovery, and registration
 
-- 🔄 **Event Service**: REST API with data validation (needs database integration)
-- 📋 **Event Registration**: User registration and attendance tracking
-- 📋 **Event Discovery**: Advanced search and filtering capabilities
+- ✅ **Event Service**: REST API backed by PostgreSQL with Kafka events for downstream consumers
+- ✅ **Event Registration**: End-to-end registration and attendance tracking persisted in the shared database
+- 🔄 **Event Discovery**: Advanced search and filtering capabilities
 
-*Expected Result*: Users will be able to create, discover, and register for professional events.
+*Current Result*: Organisers can publish events and track registrations while the discovery experience continues to expand.
 
 ### Phase 3: Professional Matching (🔄 In Progress - 25%)
 **Objective**: Connect professionals through intelligent algorithms
@@ -50,11 +50,11 @@ Meetinity is a comprehensive networking platform that allows you to:
 - 📋 **Swipe Interface**: Tinder-like interaction for professional connections
 - 📋 **Real-time Matching**: Instant notifications for mutual connections
 
-### Phase 4: Communication & Networking (📋 Planned)
+### Phase 4: Communication & Networking (🔄 In Progress - 40%)
 **Objective**: Enable communication between matched professionals
 
-- 📋 **Messaging System**: Real-time chat between matched users
-- 📋 **Conversation Management**: Thread organization and history
+- ✅ **Messaging System**: Flask-based messaging service with REST and WebSocket channels delivered
+- 🔄 **Conversation Management**: Persistent threads and read receipts under active development
 - 📋 **Notification System**: Push notifications for matches and messages
 
 ## 🛠️ For Developers
@@ -86,6 +86,7 @@ The project uses a modern **microservices architecture**. All backend services n
 - **API Gateway** (`services/api-gateway`): Flask-based request routing and authentication
 - **User Service** (`services/user-service`): OAuth authentication and profile management
 - **Event Service** (`services/event-service`): Event creation, discovery, and registration
+- **Messaging Service** (`services/messaging-service`): Real-time chat backend exposing REST and WebSocket endpoints
 - **Matching Service** (`services/matching-service`): Professional matching algorithms and swipe functionality
 - **Mobile App**: React 18 with TypeScript and Vite
 - **Admin Portal**: React-based administration interface
@@ -106,12 +107,12 @@ Our infrastructure baseline is now fully documented and automated:
 
 | Component | Location | Status |
 |---|---|---|
-| **Documentation & Contracts** | `docs/`, `contracts/` | 25% – Core specifications consolidated, awaiting final data models |
-| **API Gateway** | `services/api-gateway` | 45% – Auth pass-through and routing ready, needs coverage for event/messaging flows |
-| **User Service** | `services/user-service` | 80% – OAuth + profiles stable, pending messaging profile hooks |
-| **Event Service** | `services/event-service` | 40% – REST API scaffolding complete, registration storage outstanding |
-| **Matching Service** | `services/matching-service` | 30% – Matching logic prototype, requires data sync with events/users |
-| **Messaging (planned)** | `services/` (new) | 10% – Container baseline prepared, functionality to be implemented |
+| **Documentation & Contracts** | `docs/`, `contracts/` | 30% – Core specifications consolidated, data model refinements underway |
+| **API Gateway** | `services/api-gateway` | 65% – Auth, event, and messaging flows proxied with observability hooks |
+| **User Service** | `services/user-service` | 85% – OAuth + profiles stable, messaging preferences exposed |
+| **Event Service** | `services/event-service` | 70% – Event CRUD, registrations, and Kafka notifications available |
+| **Matching Service** | `services/matching-service` | 35% – Matching logic prototype, requires real-time data sync |
+| **Messaging Service** | `services/messaging-service` | 55% – Messaging backend live, awaiting client rollout |
 | **Mobile App** | External repo `meetinity-mobile-app` | 70% – Authentication and discovery UI shipped |
 | **Admin Portal** | External repo `meetinity-admin-portal` | 60% – User management complete |
 
@@ -136,8 +137,8 @@ We welcome all contributions! Whether you are:
 A comprehensive technical evaluation was conducted in September 2025, revealing strong foundations with strategic opportunities for growth.
 
 - **Key Strengths**: Robust OAuth authentication, modern React frontends, clean microservices architecture
-- **Critical Issues**: Event registrations, cross-service data synchronisation, and messaging flows still pending
-- **Priority Actions**: Expand gateway coverage, deliver registrations & matching data sync, implement networking features
+- **Critical Issues**: Matching data synchronisation, conversational UX, and real-time notifications remain outstanding
+- **Priority Actions**: Finalise matching data sync, roll out messaging clients & notifications, harden analytics across services
 
 Find the detailed evaluation and strategic roadmap in [`docs/project-evaluation.md`](docs/project-evaluation.md), [`docs/cloud-operations.md`](docs/cloud-operations.md), and [`TODO.md`](TODO.md).
 
