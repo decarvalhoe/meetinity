@@ -48,6 +48,16 @@ rules:
       name:
         as: http_requests_per_second
       metricsQuery: sum(rate(<<.Series>>{<<.LabelMatchers>>}[2m])) by (<<.GroupBy>>)
+    - seriesQuery: 'api_gateway_graphql_supergraph_info{<<.LabelMatchers>>}'
+      resources:
+        overrides:
+          kubernetes_namespace:
+            resource: namespace
+          pod:
+            resource: pod
+      name:
+        as: graphql_supergraph_version
+      metricsQuery: max(<<.Series>>{<<.LabelMatchers>>}) by (version, <<.GroupBy>>)
     - seriesQuery: 'events_processed_total{service="event-service",kubernetes_namespace!="",kubernetes_pod_name!=""}'
       resources:
         overrides:

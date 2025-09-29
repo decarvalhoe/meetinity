@@ -4,9 +4,14 @@ from __future__ import annotations
 
 from flask import Flask
 
+from .graphql import create_graphql_blueprint
 from .proxy import PROXY_ROUTE_DEFINITIONS, create_proxy_blueprint
 
-__all__ = ["PROXY_ROUTE_DEFINITIONS", "register_versioned_proxy_blueprints"]
+__all__ = [
+    "PROXY_ROUTE_DEFINITIONS",
+    "register_versioned_proxy_blueprints",
+    "register_graphql_blueprint",
+]
 
 
 def register_versioned_proxy_blueprints(app: Flask) -> None:
@@ -28,3 +33,11 @@ def register_versioned_proxy_blueprints(app: Flask) -> None:
 
     for version in versions:
         app.register_blueprint(create_proxy_blueprint(version, default_version))
+
+
+def register_graphql_blueprint(app: Flask) -> None:
+    """Register the GraphQL federation blueprint."""
+
+    if "graphql" in app.blueprints:
+        return
+    app.register_blueprint(create_graphql_blueprint())

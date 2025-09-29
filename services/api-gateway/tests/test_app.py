@@ -8,6 +8,7 @@ from unittest.mock import Mock
 import jwt
 import pytest
 import requests
+from pathlib import Path
 from urllib3._collections import HTTPHeaderDict
 
 
@@ -46,6 +47,9 @@ def _create_app_without_cors_origins(monkeypatch):
     monkeypatch.setenv("USER_SERVICE_URL", "http://upstream")
     monkeypatch.setenv("EVENT_SERVICE_URL", "http://events")
     monkeypatch.setenv("MATCHING_SERVICE_URL", "http://matching")
+    monkeypatch.setenv("MESSAGING_SERVICE_URL", "http://messaging")
+    monkeypatch.setenv("ANALYTICS_SERVICE_URL", "http://analytics")
+    monkeypatch.setenv("PAYMENT_SERVICE_URL", "http://payments")
     monkeypatch.setenv("JWT_SECRET", "secret")
     monkeypatch.setenv("RATE_LIMIT_AUTH", "10/minute")
     monkeypatch.setenv("RATE_LIMIT_EVENTS", "10/minute")
@@ -68,6 +72,9 @@ def app(monkeypatch):
     os.environ["USER_SERVICE_URL"] = "http://upstream"
     os.environ["EVENT_SERVICE_URL"] = "http://events"
     os.environ["MATCHING_SERVICE_URL"] = "http://matching"
+    os.environ["MESSAGING_SERVICE_URL"] = "http://messaging"
+    os.environ["ANALYTICS_SERVICE_URL"] = "http://analytics"
+    os.environ["PAYMENT_SERVICE_URL"] = "http://payments"
     os.environ["CORS_ORIGINS"] = ""
     os.environ["JWT_SECRET"] = "secret"
     os.environ["RATE_LIMIT_AUTH"] = "10/minute"
@@ -399,4 +406,70 @@ def test_cors_allows_another_origin_when_env_absent(monkeypatch):
         response = client.get("/health", headers={"Origin": origin})
 
     assert response.headers.get("Access-Control-Allow-Origin") == origin
+
+
+def test_graphql_contract_publication(monkeypatch, tmp_path):
+    monkeypatch.setenv("GRAPHQL_FEDERATION_ENABLED", "true")
+    monkeypatch.setenv("GRAPHQL_ROUTER_URL", "http://router/graphql")
+    monkeypatch.setenv("GRAPHQL_SUPERGRAPH_DIR", str(tmp_path / "supergraph"))
+    monkeypatch.setenv("GRAPHQL_CONTRACT_DIR", str(tmp_path / "contracts"))
+
+    subgraphs = [
+        {
+            "name": "identity",
+            "routing_url": "http://router.identity/graphql",
+            "sdl": "type Query { users: [ID!] profile: ID }",
+            "rest_mappings": {"/api/users": "users", "/api/profile": "profile"},
+        },
+        {
+            "name": "auth",
+            "routing_url": "http://router.auth/graphql",
+            "sdl": "type Query { auth: Boolean }",
+            "rest_mappings": {"/api/auth": "auth"},
+        },
+        {
+            "name": "engagement",
+            "routing_url": "http://router.engagement/graphql",
+            "sdl": "type Query { events: [ID!] matching: [ID!] conversations: [ID!] analytics: [ID!] }",
+            "rest_mappings": {
+                "/api/events": "events",
+                "/api/matching": "matching",
+                "/api/conversations": "conversations",
+                "/api/analytics": "analytics",
+            },
+        },
+    ]
+    monkeypatch.setenv("GRAPHQL_SUBGRAPHS", json.dumps(subgraphs))
+
+    monkeypatch.setenv("USER_SERVICE_URL", "http://users")
+    monkeypatch.setenv("EVENT_SERVICE_URL", "http://events")
+    monkeypatch.setenv("MATCHING_SERVICE_URL", "http://matching")
+    monkeypatch.setenv("JWT_SECRET", "secret")
+    monkeypatch.setenv("RATE_LIMIT_AUTH", "10/minute")
+    monkeypatch.setenv("RATE_LIMIT_EVENTS", "10/minute")
+    monkeypatch.setenv("RATE_LIMIT_MATCHING", "10/minute")
+    monkeypatch.setenv("RESILIENCE_BACKOFF_FACTOR", "0")
+
+    mock_resp = Mock()
+    mock_resp.status_code = 200
+    monkeypatch.setattr("src.app.requests.get", lambda *args, **kwargs: mock_resp)
+
+    app = create_app()
+    app.config["TESTING"] = True
+
+    with app.test_client() as client:
+        schema_resp = client.get("/graphql/schema")
+        assert schema_resp.status_code == 200
+        assert "Supergraph SDL" in schema_resp.data.decode("utf-8")
+
+        metadata_resp = client.get("/graphql/metadata")
+        assert metadata_resp.status_code == 200
+        metadata = metadata_resp.get_json()
+        assert metadata["version"] == app.config["GRAPHQL_SCHEMA_VERSION"]
+        assert "/api/users" in metadata["operations"]
+
+    manifest_path = Path(app.config["GRAPHQL_MANIFEST_PATH"])
+    assert manifest_path.exists()
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    assert manifest["version"] == app.config["GRAPHQL_SCHEMA_VERSION"]
 

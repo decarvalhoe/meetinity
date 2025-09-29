@@ -8,11 +8,14 @@ HELM_DIR="$(dirname "$0")/../helm"
 K8S_DIR="$(dirname "$0")/../kubernetes"
 MONITORING_DIR="$(dirname "$0")/../monitoring"
 SECURITY_DIR="$(dirname "$0")/../security"
+REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 NAMESPACE="meetinity-${ENVIRONMENT}"
 HELM_VALUES_DIR="${HELM_DIR}/meetinity/values"
 K8S_ENV_DIR="${K8S_DIR}/environments/${ENVIRONMENT}"
 DATABASE_SECRET_NAME="platform-database"
 REDIS_SECRET_NAME="platform-redis"
+SUPERGRAPH_SCRIPT="${REPO_ROOT}/services/api-gateway/scripts/publish_contracts.py"
+SUPERGRAPH_LINK="${REPO_ROOT}/services/api-gateway/deploy/graphql/supergraph.graphql"
 
 if ! command -v jq >/dev/null 2>&1; then
   echo "jq is required to parse Terraform outputs" >&2
@@ -166,6 +169,29 @@ helm upgrade --install "meetinity-${ENVIRONMENT}" "$HELM_DIR/meetinity" \
   --set-string global.database.secretName="$DATABASE_SECRET_NAME" \
   --set-string global.redis.secretName="$REDIS_SECRET_NAME" \
   --wait
+
+if [[ -x "$SUPERGRAPH_SCRIPT" ]]; then
+  log "Ensuring GraphQL contracts are up to date"
+  if ! python3 "$SUPERGRAPH_SCRIPT" --print-path >/tmp/supergraph-path 2>/tmp/supergraph.log; then
+    log "GraphQL contract generation skipped; federation may be disabled"
+  fi
+fi
+
+if [[ -f /tmp/supergraph-path ]]; then
+  SUPERGRAPH_PATH="$(cat /tmp/supergraph-path)"
+  rm -f /tmp/supergraph-path
+else
+  SUPERGRAPH_PATH="$SUPERGRAPH_LINK"
+fi
+rm -f /tmp/supergraph.log 2>/dev/null || true
+
+if [[ -n "$SUPERGRAPH_PATH" && -f "$SUPERGRAPH_PATH" ]]; then
+  log "Publishing Apollo Router supergraph configuration"
+  kubectl create configmap "apollo-router-supergraph" \
+    --namespace "$NAMESPACE" \
+    --from-file=supergraph.graphql="$SUPERGRAPH_PATH" \
+    --dry-run=client -o yaml | kubectl apply -f -
+fi
 
 log "Waiting for core services to be ready"
 for svc in api-gateway user-service matching-service event-service; do
