@@ -111,6 +111,28 @@ jobs:
         if: steps.node_manifests.outputs.has_package != 'true'
         run: echo 'No package.json found. Skipping tests.'
 
+  integration-tests:
+    name: Integration Tests
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Python dependencies
+        run: pip install pytest requests PyJWT
+
+      - name: Confirm Docker availability
+        run: docker compose version
+
+      - name: Run integration suite
+        run: pytest -m integration tests/integration -vv
+
   security_scan:
     name: Security Scan
     needs: build
