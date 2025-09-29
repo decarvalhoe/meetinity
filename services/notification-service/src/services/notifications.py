@@ -214,6 +214,7 @@ class NotificationService:
                         "recipient_id": recipient_id,
                         "scheduled_for": scheduled_for.isoformat() if scheduled_for else None,
                     },
+                    enqueued_at=delivery.queued_at,
                 )
             )
 

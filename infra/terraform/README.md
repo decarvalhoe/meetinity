@@ -13,6 +13,7 @@ This Terraform configuration bootstraps the AWS infrastructure required to run t
 - **AWS Backup plan** – Daily backups for the Aurora PostgreSQL cluster with configurable retention windows.
 - **Cost monitoring** – Monthly AWS Budget capable of notifying stakeholders when spend exceeds thresholds.
 - **Managed search domain** – Highly available OpenSearch cluster with TLS enforced endpoints for the Search Service.
+- **Managed streaming (Kafka + schema registry)** – Amazon MSK brokers with TLS-only access, dedicated client security groups, and an AWS Glue schema registry for validating event contracts.
 
 ## Usage
 

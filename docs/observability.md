@@ -65,6 +65,18 @@ Recommended Grafana dashboards:
 - **Service SLO dashboards** mapping latency/error budgets across services.
 - **Infrastructure saturation** – CPU/memory pressure, pod churn, and HPA/VPA actions.
 - **Tracing health** – OTLP exporter errors, Jaeger collector queue depth, Fluent Bit output retries.
+- **Kafka streaming** – consumer lag (`notification_queue_consumer_lag_seconds`), DLQ depth (`notification_dead_letter_depth`), and publish success/failure counters exported by the notification service.
+
+### Kafka observability runbook
+
+Managed Kafka replaces the local Compose brokers. The MSK module provisions CloudWatch log forwarding and a Glue Schema Registry so that producers and consumers share contracts. Application-level visibility is delivered through the notification service metrics and DLQ queue depth APIs:
+
+1. **Lag monitoring** – `services/notification-service/src/metrics.py` exports `notification_queue_consumer_lag_seconds` and `notification_queue_publish_latency_seconds`. Grafana dashboards should alert if lag exceeds 30 seconds for five minutes or if publish latency spikes above 5 seconds.
+2. **Dead-letter tracking** – the queue module updates `notification_dead_letter_depth` whenever a message is sent to or drained from the DLQ. Alerts should trigger when depth grows beyond 20 or increases continuously for ten minutes.
+3. **Broker health** – MSK surfaces broker CPU, disk, and ISR metrics in CloudWatch. Import the AWS Managed Kafka dashboard and overlay log-based alerts for authentication failures (SASL) or topic ACL denials.
+4. **Schema compatibility** – Glue registry changes are tracked via Terraform. Enable the Schema Registry audit trail and ensure schema evolution follows the compatibility mode configured in `infra/terraform/modules/msk`.
+
+For incident response, capture the failing message payloads from the DLQ topic (prefixed `<topic>.dlq`) using the Kafka tooling in the notification service README. Always validate against the schema registry before replaying into the primary topic.
 
 ## Incident alerting procedures
 

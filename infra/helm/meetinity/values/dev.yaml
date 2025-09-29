@@ -19,6 +19,14 @@ shared:
       data:
         FEATURE_FLAGS: "true"
         DEFAULT_TIMEZONE: "UTC"
+  vaultSecrets:
+    - name: shared-kafka
+      path: "kv/data/{{ .Values.global.environment }}/shared/kafka"
+      target:
+        name: meetinity-shared-kafka
+        creationPolicy: Owner
+        template:
+          type: Opaque
 
 api-gateway:
   environment: dev
@@ -218,6 +226,12 @@ notification-service:
             REDIS_URL: '{{ .data.redis_url | default "redis://redis:6379/0" }}'
             KAFKA_BOOTSTRAP_SERVERS: '{{ .data.kafka_bootstrap | default "kafka:9092" }}'
             KAFKA_NOTIFICATION_TOPIC: '{{ .data.kafka_topic | default "notifications.dispatch" }}'
+            KAFKA_SCHEMA_REGISTRY_URL: '{{ .data.kafka_schema_registry | default "" }}'
+            KAFKA_SECURITY_PROTOCOL: '{{ .data.kafka_security_protocol | default "" }}'
+            KAFKA_SASL_MECHANISM: '{{ .data.kafka_sasl_mechanism | default "" }}'
+            KAFKA_SASL_USERNAME: '{{ .data.kafka_sasl_username | default "" }}'
+            KAFKA_SASL_PASSWORD: '{{ .data.kafka_sasl_password | default "" }}'
+            KAFKA_DLQ_TOPIC: '{{ .data.kafka_dlq_topic | default "notifications.dispatch.dlq" }}'
 
 moderation-service:
   environment: dev
@@ -261,6 +275,12 @@ moderation-service:
             REDIS_URL: '{{ .data.redis_url | default "redis://redis:6379/1" }}'
             KAFKA_BOOTSTRAP_SERVERS: '{{ .data.kafka_bootstrap | default "kafka:9092" }}'
             KAFKA_MODERATION_TOPIC: '{{ .data.kafka_topic | default "moderation.events" }}'
+            KAFKA_SCHEMA_REGISTRY_URL: '{{ .data.kafka_schema_registry | default "" }}'
+            KAFKA_SECURITY_PROTOCOL: '{{ .data.kafka_security_protocol | default "" }}'
+            KAFKA_SASL_MECHANISM: '{{ .data.kafka_sasl_mechanism | default "" }}'
+            KAFKA_SASL_USERNAME: '{{ .data.kafka_sasl_username | default "" }}'
+            KAFKA_SASL_PASSWORD: '{{ .data.kafka_sasl_password | default "" }}'
+            KAFKA_DLQ_TOPIC: '{{ .data.kafka_dlq_topic | default "moderation.events.dlq" }}'
             ML_CLASSIFIER_URL: '{{ .data.ml_classifier_url | default "" }}'
 
 search-service:

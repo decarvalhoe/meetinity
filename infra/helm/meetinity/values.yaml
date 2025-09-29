@@ -41,6 +41,16 @@ global:
       password: password
       url: url
       readerUrl: reader_url
+  kafka:
+    secretName: meetinity-shared-kafka
+    secretKeys:
+      bootstrapServers: bootstrap_servers
+      schemaRegistryUrl: schema_registry_url
+      saslUsername: sasl_username
+      saslPassword: sasl_password
+      securityProtocol: security_protocol
+      saslMechanism: sasl_mechanism
+      dlqTopic: dlq_topic
   observability:
     tracing:
       enabled: false

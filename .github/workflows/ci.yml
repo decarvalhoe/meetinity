@@ -133,6 +133,28 @@ jobs:
       - name: Run integration suite
         run: pytest -m integration tests/integration -vv
 
+  event-driven-tests:
+    name: Event-driven Tests
+    needs: build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: services/notification-service
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt pytest
+
+      - name: Run event-driven tests
+        run: pytest -m eventdriven -vv
+
   data-pipelines:
     name: Data pipeline validation
     needs: build
