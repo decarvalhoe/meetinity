@@ -48,6 +48,8 @@ locals {
     Environment = var.environment,
     Project     = "meetinity"
   }, var.tags)
+  payment_service_webhooks    = var.payment_service_webhooks
+  payment_service_vault_paths = var.payment_service_vault_paths
 }
 
 module "vpc" {

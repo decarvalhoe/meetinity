@@ -350,3 +350,24 @@ variable "cost_monitoring" {
     enabled = false
   }
 }
+
+variable "payment_service_webhooks" {
+  description = "Webhook endpoints for payment provider callbacks exposed through API Gateway."
+  type = map(object({
+    url        = string
+    secret_arn = string
+  }))
+  default = {}
+}
+
+variable "payment_service_vault_paths" {
+  description = "Vault secret paths that should be synced via External Secrets for the payment service."
+  type = object({
+    stripe = string
+    paypal = string
+  })
+  default = {
+    stripe = "kv/data/shared/services/payment-service/stripe"
+    paypal = "kv/data/shared/services/payment-service/paypal"
+  }
+}
