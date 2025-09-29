@@ -5,6 +5,13 @@ global:
     default:
       name: vault-dev
       kind: ClusterSecretStore
+      spec:
+        provider:
+          vault:
+            server: https://vault.dev.meetinity.internal
+            auth:
+              kubernetes:
+                role: meetinity-dev
 
 shared:
   configMaps:
@@ -49,11 +56,14 @@ api-gateway:
   env:
     - name: LOG_LEVEL
       value: info
-  sealedSecrets:
+  vaultSecrets:
     - name: api-gateway-tls
-      encryptedData:
-        tls.crt: PLACEHOLDER_DEV_CERT
-        tls.key: PLACEHOLDER_DEV_KEY
+      path: "kv/data/dev/ingress/api-gateway"
+      target:
+        name: api-gateway-dev-tls
+        creationPolicy: Owner
+        template:
+          type: kubernetes.io/tls
 
 user-service:
   environment: dev
