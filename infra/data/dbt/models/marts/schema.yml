@@ -1,0 +1,29 @@
+version: 2
+
+models:
+  - name: fct_user_engagement
+    description: Daily engagement facts aggregated from application events.
+    columns:
+      - name: user_id
+        tests:
+          - not_null
+      - name: activity_date
+        tests:
+          - not_null
+      - name: sessions_started
+      - name: sessions_ended
+      - name: purchases
+      - name: made_purchase
+      - name: is_recent_user
+
+exposures:
+  - name: executive_engagement_dashboard
+    type: dashboard
+    maturity: high
+    url: https://grafana.meetinity.io/d/engagement
+    description: Executive dashboard tracking user sessions and conversions.
+    owner:
+      name: Data Platform
+      email: data-team@meetinity.io
+    depends_on:
+      - ref('fct_user_engagement')

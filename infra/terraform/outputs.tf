@@ -120,6 +120,51 @@ output "analytics_warehouse_database" {
   value       = length(module.analytics_warehouse) > 0 ? module.analytics_warehouse[0].database_name : null
 }
 
+output "analytics_warehouse_data_access_role_arn" {
+  description = "IAM role ARN the warehouse assumes for data lake access."
+  value       = length(module.analytics_warehouse) > 0 ? module.analytics_warehouse[0].data_access_role_arn : null
+}
+
+output "data_lake_bucket_name" {
+  description = "Name of the S3 bucket backing the analytics data lake."
+  value       = length(module.data_lake) > 0 ? module.data_lake[0].bucket_name : null
+}
+
+output "data_lake_bucket_arn" {
+  description = "ARN of the S3 bucket backing the analytics data lake."
+  value       = length(module.data_lake) > 0 ? module.data_lake[0].bucket_arn : null
+}
+
+output "data_lake_glue_database" {
+  description = "Glue Data Catalog database that indexes raw lake data."
+  value       = length(module.data_lake) > 0 ? module.data_lake[0].glue_database_name : null
+}
+
+output "data_lake_glue_crawler" {
+  description = "Glue crawler responsible for discovering data lake schemas."
+  value       = length(module.data_lake) > 0 ? module.data_lake[0].glue_crawler_name : null
+}
+
+output "data_lake_glue_role_arn" {
+  description = "IAM role ARN assumed by Glue for data lake ingestion."
+  value       = length(module.data_lake) > 0 ? module.data_lake[0].glue_role_arn : null
+}
+
+output "data_lake_athena_workgroup" {
+  description = "Athena workgroup configured for querying the data lake."
+  value       = length(module.data_lake) > 0 ? module.data_lake[0].athena_workgroup_name : null
+}
+
+output "data_lake_athena_role_arn" {
+  description = "IAM role ARN used by Athena for data lake queries."
+  value       = length(module.data_lake) > 0 ? module.data_lake[0].athena_role_arn : null
+}
+
+output "data_lake_kms_key_arn" {
+  description = "KMS key securing the data lake if encryption is customer managed."
+  value       = length(module.data_lake) > 0 ? module.data_lake[0].kms_key_arn : null
+}
+
 output "static_assets_bucket_name" {
   description = "Name of the S3 bucket hosting static assets."
   value       = module.static_assets.bucket_name

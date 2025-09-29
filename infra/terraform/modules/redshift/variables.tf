@@ -68,8 +68,15 @@ variable "kms_key_id" {
   default     = ""
 }
 
+variable "data_lake_bucket_arns" {
+  description = "List of S3 bucket ARNs the warehouse can access"
+  type        = list(string)
+  default     = []
+}
+
 variable "tags" {
   description = "Tags applied to resources"
   type        = map(string)
   default     = {}
 }
+

@@ -50,6 +50,8 @@ locals {
   }, var.tags)
   payment_service_webhooks    = var.payment_service_webhooks
   payment_service_vault_paths = var.payment_service_vault_paths
+  data_lake_bucket_name = var.data_lake_config.enabled ? coalesce(try(var.data_lake_config.bucket_name, null), "${var.environment}-${var.data_lake_config.name}") : null
+  data_lake_raw_path    = var.data_lake_config.enabled ? coalesce(try(var.data_lake_config.crawler_s3_target_path, null), "s3://${local.data_lake_bucket_name}/raw/") : null
 }
 
 module "vpc" {
@@ -156,6 +158,28 @@ module "search" {
   tags                         = local.default_tags
 }
 
+module "data_lake" {
+  source = "./modules/data_lake"
+
+  count = var.data_lake_config.enabled ? 1 : 0
+
+  name                               = "${var.environment}-${var.data_lake_config.name}"
+  bucket_name                        = try(var.data_lake_config.bucket_name, null)
+  force_destroy                      = try(var.data_lake_config.force_destroy, false)
+  versioning_enabled                 = try(var.data_lake_config.versioning_enabled, true)
+  create_kms_key                     = try(var.data_lake_config.create_kms_key, true)
+  kms_key_arn                        = try(var.data_lake_config.kms_key_arn, null)
+  glue_database_name                 = var.data_lake_config.glue_database_name
+  crawler_name                       = var.data_lake_config.crawler_name
+  crawler_role_name                  = try(var.data_lake_config.crawler_role_name, null)
+  crawler_schedule                   = try(var.data_lake_config.crawler_schedule, null)
+  crawler_s3_target_path             = local.data_lake_raw_path
+  athena_workgroup_name              = var.data_lake_config.athena_workgroup_name
+  athena_output_prefix               = try(var.data_lake_config.athena_output_prefix, "athena/results/")
+  athena_enforce_bucket_owner_full_control = try(var.data_lake_config.athena_enforce_bucket_owner_full_control, true)
+  tags                               = local.default_tags
+}
+
 module "analytics_warehouse" {
   source = "./modules/redshift"
 
@@ -174,6 +198,7 @@ module "analytics_warehouse" {
     module.eks.cluster_security_group_id,
   ]))
   kms_key_id                 = try(var.analytics_warehouse_config.kms_key_id, null)
+  data_lake_bucket_arns      = distinct(concat(try(var.analytics_warehouse_config.data_lake_bucket_arns, []), length(module.data_lake) > 0 ? [module.data_lake[0].bucket_arn] : []))
   tags                       = local.default_tags
 }
 
