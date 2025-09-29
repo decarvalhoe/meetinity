@@ -4,6 +4,8 @@ from typing import Any
 
 from flask import Response
 
+from src.integrations import ModerationClient, ModerationResponse
+
 
 def auth_header(user_id: int) -> dict[str, str]:
     return {"Authorization": f"Bearer {user_id}"}
@@ -52,6 +54,8 @@ def test_post_message_and_fetch_thread(client):
     message = send_response.get_json()
     assert message["conversation_id"] == conversation_id
     assert message["sender_id"] == 2
+    assert message["moderation_status"] == "approved"
+    assert message["moderation_labels"] == {}
 
     list_response = _get_json(client, f"/conversations/{conversation_id}/messages", user_id=1)
     assert list_response.status_code == 200
@@ -83,3 +87,27 @@ def test_mark_read_resets_unread_count(client):
     list_after = _get_json(client, "/conversations", user_id=2)
     unread_after = list_after.get_json()["conversations"][0]["unread_count"]
     assert unread_after == 0
+
+
+def test_moderation_blocks_message(monkeypatch, app):
+    app.config["MODERATION_SERVICE_URL"] = "http://moderation.local"
+
+    def fake_enabled(self):
+        return True
+
+    def fake_review(self, text, **context):
+        return ModerationResponse(status="blocked", score=0.99, labels={"reason": "policy"})
+
+    monkeypatch.setattr(ModerationClient, "is_enabled", fake_enabled)
+    monkeypatch.setattr(ModerationClient, "review_message", fake_review)
+
+    client = app.test_client()
+    response = _post_json(
+        client,
+        "/conversations",
+        {"participant_id": 2, "initial_message": "contenu interdit"},
+        user_id=1,
+    )
+    assert response.status_code == 400
+    body = response.get_json()
+    assert "Le message a été bloqué" in body["details"]["initial_message"][0]

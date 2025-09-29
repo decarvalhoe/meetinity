@@ -19,6 +19,7 @@ from src.services.networking import NetworkingService
 from src.services.participants import SpeakerService, SponsorService
 from src.services.recommendations import RecommendationService
 from src.services.search import EventSearchService
+from src.integrations.moderation_service import ModerationServiceClient
 
 T = TypeVar("T")
 
@@ -35,7 +36,7 @@ SERVICE_FACTORIES: Dict[str, Callable[[Any], Any]] = {
     "registration_service": RegistrationService,
 }
 
-EXTRA_SERVICE_KEYS = {"search_service", "recommendation_service"}
+EXTRA_SERVICE_KEYS = {"search_service", "recommendation_service", "moderation_client"}
 
 
 def get_db_session():
@@ -114,7 +115,10 @@ def get_recommendation_service() -> RecommendationService:
 def _get_service(key: str, factory: Type[T]) -> T:
     if key not in g:
         session = get_db_session()
-        g[key] = factory(session)
+        if key == "feedback_service":
+            g[key] = FeedbackService(session, get_moderation_client())
+        else:
+            g[key] = factory(session)
     return g[key]
 
 
@@ -130,6 +134,13 @@ def cleanup_services(exception):
                 session.rollback()
         finally:
             session.close()
+
+
+def get_moderation_client() -> ModerationServiceClient:
+    if "moderation_client" not in g:
+        base_url = current_app.config.get("MODERATION_SERVICE_URL")
+        g["moderation_client"] = ModerationServiceClient(base_url)
+    return g["moderation_client"]
 
 
 def _get_search_client():

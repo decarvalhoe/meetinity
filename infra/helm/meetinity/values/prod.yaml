@@ -274,6 +274,7 @@ event-service:
           type: Opaque
           data:
             EVENT_CATALOG_URL: '{{ .data.catalog_url }}'
+            MODERATION_SERVICE_URL: '{{ .data.moderation_url | default "http://moderation-service:8080" }}'
 
 notification-service:
   environment: prod
@@ -317,3 +318,47 @@ notification-service:
             REDIS_URL: '{{ .data.redis_url | default "redis://redis:6379/0" }}'
             KAFKA_BOOTSTRAP_SERVERS: '{{ .data.kafka_bootstrap | default "kafka:9092" }}'
             KAFKA_NOTIFICATION_TOPIC: '{{ .data.kafka_topic | default "notifications.dispatch" }}'
+
+moderation-service:
+  environment: prod
+  domain: meetinity.com
+  replicaCount: 3
+  autoscaling:
+    minReplicas: 3
+    maxReplicas: 6
+    metrics:
+      - type: Resource
+        resource:
+          name: cpu
+          target:
+            type: Utilization
+            averageUtilization: 55
+      - type: Resource
+        resource:
+          name: memory
+          target:
+            type: Utilization
+            averageUtilization: 65
+  resources:
+    requests:
+      cpu: 250m
+      memory: 384Mi
+    limits:
+      cpu: 600m
+      memory: 768Mi
+  podDisruptionBudget:
+    minAvailable: 2
+  vaultSecrets:
+    - name: moderation-service-env
+      path: kv/data/prod/moderation-service/app
+      secretStoreRef:
+        name: vault-prod
+      target:
+        template:
+          type: Opaque
+          data:
+            DATABASE_URL: '{{ .data.database_url | default "" }}'
+            REDIS_URL: '{{ .data.redis_url | default "redis://redis:6379/1" }}'
+            KAFKA_BOOTSTRAP_SERVERS: '{{ .data.kafka_bootstrap | default "kafka:9092" }}'
+            KAFKA_MODERATION_TOPIC: '{{ .data.kafka_topic | default "moderation.events" }}'
+            ML_CLASSIFIER_URL: '{{ .data.ml_classifier_url | default "" }}'

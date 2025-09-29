@@ -26,6 +26,7 @@ class FeedbackRepository:
         comment: Optional[str],
         sentiment: Optional[str],
         metadata: Optional[dict],
+        status: Optional[str] = None,
     ) -> EventFeedback:
         feedback = EventFeedback(
             event_id=event_id,
@@ -35,6 +36,7 @@ class FeedbackRepository:
             comment=comment,
             sentiment=sentiment,
             metadata=metadata,
+            status=status or "pending",
         )
         self.session.add(feedback)
         self.session.flush()
