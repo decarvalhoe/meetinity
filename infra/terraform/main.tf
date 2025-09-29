@@ -52,6 +52,10 @@ locals {
   payment_service_vault_paths = var.payment_service_vault_paths
   data_lake_bucket_name = var.data_lake_config.enabled ? coalesce(try(var.data_lake_config.bucket_name, null), "${var.environment}-${var.data_lake_config.name}") : null
   data_lake_raw_path    = var.data_lake_config.enabled ? coalesce(try(var.data_lake_config.crawler_s3_target_path, null), "s3://${local.data_lake_bucket_name}/raw/") : null
+  kafka_allowed_security_group_ids = var.kafka_config.enabled ? distinct(concat(var.kafka_config.allowed_security_group_ids, [
+    module.eks.node_security_group_id,
+    module.eks.cluster_security_group_id,
+  ])) : []
 }
 
 module "vpc" {
@@ -126,6 +130,32 @@ module "redis" {
   at_rest_encryption_enabled = var.redis_config.at_rest_encryption_enabled
   auto_minor_version_upgrade = var.redis_config.auto_minor_version_upgrade
   tags                       = local.default_tags
+}
+
+module "kafka" {
+  count = var.kafka_config.enabled ? 1 : 0
+
+  source = "./modules/msk"
+
+  name                             = "${var.environment}-${var.kafka_config.name}"
+  kafka_version                    = var.kafka_config.kafka_version
+  number_of_broker_nodes           = var.kafka_config.number_of_broker_nodes
+  broker_instance_type             = var.kafka_config.broker_instance_type
+  ebs_volume_size                  = var.kafka_config.ebs_volume_size
+  subnet_ids                       = module.vpc.private_subnet_ids
+  vpc_id                           = module.vpc.vpc_id
+  client_ingress_cidrs             = var.kafka_config.allowed_cidr_blocks
+  client_ingress_security_group_ids = local.kafka_allowed_security_group_ids
+  configuration_overrides          = try(var.kafka_config.configuration_overrides, {})
+  enhanced_monitoring              = try(var.kafka_config.enhanced_monitoring, "PER_TOPIC_PER_PARTITION")
+  broker_log_group_retention       = try(var.kafka_config.log_retention_in_days, 14)
+  schema_registry                  = try(var.kafka_config.schema_registry, {
+    enabled       = true
+    name          = "registry"
+    description   = null
+    compatibility = "BACKWARD"
+  })
+  tags                             = local.default_tags
 }
 
 module "search" {

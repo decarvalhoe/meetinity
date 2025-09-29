@@ -19,6 +19,12 @@ def create_app(config: dict[str, object] | None = None) -> Flask:
         "REDIS_URL": os.getenv("REDIS_URL", "redis://redis:6379/0"),
         "KAFKA_BOOTSTRAP_SERVERS": os.getenv("KAFKA_BOOTSTRAP_SERVERS", ""),
         "KAFKA_NOTIFICATION_TOPIC": os.getenv("KAFKA_NOTIFICATION_TOPIC", "notifications.dispatch"),
+        "KAFKA_SCHEMA_REGISTRY_URL": os.getenv("KAFKA_SCHEMA_REGISTRY_URL", ""),
+        "KAFKA_SECURITY_PROTOCOL": os.getenv("KAFKA_SECURITY_PROTOCOL", ""),
+        "KAFKA_SASL_MECHANISM": os.getenv("KAFKA_SASL_MECHANISM", ""),
+        "KAFKA_SASL_USERNAME": os.getenv("KAFKA_SASL_USERNAME", ""),
+        "KAFKA_SASL_PASSWORD": os.getenv("KAFKA_SASL_PASSWORD", ""),
+        "KAFKA_DLQ_TOPIC": os.getenv("KAFKA_DLQ_TOPIC", "notifications.dispatch.dlq"),
     }
     app.config.from_mapping(default_config)
     if config:

@@ -67,3 +67,13 @@ docker compose -f docker-compose.dev.yml logs -f api-gateway user-service event-
 
 The GitHub Actions workflow (`.github/workflows/ci.yml`) now contains an `Integration Tests` job that provisions the same stack and executes `pytest -m integration` automatically on pull requests.
 
+### Event-driven verification
+
+To guard the new Kafka workflows, a dedicated `Event-driven Tests` job runs `pytest -m eventdriven services/notification-service/tests -vv`. These tests use the in-memory queue implementation to simulate publish/consume flows, validate DLQ behaviour, and assert that Prometheus metrics are emitted when lag or failures occur. When iterating locally, run the same marker to exercise the queue module in isolation:
+
+```bash
+pytest -m eventdriven services/notification-service/tests -vv
+```
+
+Because the tests avoid hitting MSK directly they execute quickly and can run in developer laptops or ephemeral CI runners without additional credentials.
+

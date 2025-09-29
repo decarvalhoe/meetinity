@@ -1,5 +1,6 @@
 import sys
 from pathlib import Path
+import sys
 
 import pytest
 
@@ -10,6 +11,7 @@ if str(PROJECT_ROOT) not in sys.path:
 from src.database import Base, dispose_engine, get_engine
 from src.main import create_app
 from src.queue import InMemoryQueue
+from src.metrics import reset_metrics
 
 
 class FakeRedis:
@@ -42,6 +44,13 @@ def app():
 @pytest.fixture
 def client(app):
     return app.test_client()
+
+
+@pytest.fixture(autouse=True)
+def _reset_notification_metrics():
+    reset_metrics()
+    yield
+    reset_metrics()
 
 
 def auth_header(user_id: int) -> dict[str, str]:

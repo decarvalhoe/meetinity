@@ -183,6 +183,53 @@ variable "redis_config" {
   }
 }
 
+variable "kafka_config" {
+  description = "Configuration for the managed Kafka streaming cluster."
+  type = object({
+    enabled                    = bool
+    name                       = string
+    kafka_version              = string
+    number_of_broker_nodes     = number
+    broker_instance_type       = string
+    ebs_volume_size            = number
+    allowed_cidr_blocks        = list(string)
+    allowed_security_group_ids = list(string)
+    configuration_overrides    = optional(map(string), {})
+    enhanced_monitoring        = optional(string, "PER_TOPIC_PER_PARTITION")
+    log_retention_in_days      = optional(number, 14)
+    schema_registry            = optional(object({
+      enabled       = bool
+      name          = string
+      description   = optional(string)
+      compatibility = optional(string, "BACKWARD")
+    }), {
+      enabled       = true
+      name          = "registry"
+      description   = "Meetinity schema registry"
+      compatibility = "BACKWARD"
+    })
+  })
+  default = {
+    enabled                    = true
+    name                       = "kafka"
+    kafka_version              = "3.5.1"
+    number_of_broker_nodes     = 3
+    broker_instance_type       = "kafka.m5.large"
+    ebs_volume_size            = 1000
+    allowed_cidr_blocks        = []
+    allowed_security_group_ids = []
+    configuration_overrides    = {}
+    enhanced_monitoring        = "PER_TOPIC_PER_PARTITION"
+    log_retention_in_days      = 14
+    schema_registry = {
+      enabled       = true
+      name          = "registry"
+      description   = "Meetinity managed schemas"
+      compatibility = "BACKWARD"
+    }
+  }
+}
+
 variable "search_domain_config" {
   description = "Configuration for the managed OpenSearch domain backing the search service."
   type = object({

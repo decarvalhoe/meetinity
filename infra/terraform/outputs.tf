@@ -105,6 +105,26 @@ output "search_security_group_id" {
   value       = module.search.security_group_id
 }
 
+output "kafka_bootstrap_brokers" {
+  description = "Bootstrap brokers for the managed Kafka cluster (TLS)."
+  value       = length(module.kafka) > 0 ? module.kafka[0].bootstrap_brokers_tls : null
+}
+
+output "kafka_security_group_id" {
+  description = "Security group ID allowing Kafka client access."
+  value       = length(module.kafka) > 0 ? module.kafka[0].security_group_id : null
+}
+
+output "kafka_schema_registry_arn" {
+  description = "Glue schema registry ARN backing Kafka topics."
+  value       = length(module.kafka) > 0 ? module.kafka[0].schema_registry_arn : null
+}
+
+output "kafka_log_group_name" {
+  description = "CloudWatch log group capturing Kafka broker logs."
+  value       = length(module.kafka) > 0 ? module.kafka[0].log_group_name : null
+}
+
 output "analytics_warehouse_endpoint" {
   description = "Endpoint of the analytics data warehouse."
   value       = length(module.analytics_warehouse) > 0 ? module.analytics_warehouse[0].endpoint : null

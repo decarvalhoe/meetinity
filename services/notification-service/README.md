@@ -8,6 +8,7 @@ The notification service coordinates multi-channel alerts (email, SMS, push, in-
 - Manage per-user channel preferences via REST endpoints.
 - Track delivery attempts for each channel and update statuses.
 - Publish queue messages per delivery (Kafka topic configurable via environment variables).
+- Expose Prometheus metrics for queue health (publish counts, lag) and persist failures into a dead-letter queue.
 
 ## Configuration
 
@@ -17,6 +18,12 @@ The notification service coordinates multi-channel alerts (email, SMS, push, in-
 | `REDIS_URL` | Redis connection URI used for caching preferences. | `redis://redis:6379/0` |
 | `KAFKA_BOOTSTRAP_SERVERS` | Comma-separated Kafka bootstrap servers. | `""` (in-memory queue) |
 | `KAFKA_NOTIFICATION_TOPIC` | Kafka topic for queued deliveries. | `notifications.dispatch` |
+| `KAFKA_SCHEMA_REGISTRY_URL` | Schema registry endpoint used by producers. | `""` |
+| `KAFKA_SECURITY_PROTOCOL` | Kafka security protocol (e.g. `SASL_SSL`). | `""` |
+| `KAFKA_SASL_MECHANISM` | SASL mechanism (e.g. `SCRAM-SHA-512`). | `""` |
+| `KAFKA_SASL_USERNAME` | Username for SASL authentication. | `""` |
+| `KAFKA_SASL_PASSWORD` | Password for SASL authentication. | `""` |
+| `KAFKA_DLQ_TOPIC` | Dead-letter topic used when publishing fails. | `notifications.dispatch.dlq` |
 
 All settings can also be provided via individual `DB_*` / `REDIS_*` environment variables as supported by the helper modules.
 
