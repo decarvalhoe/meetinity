@@ -83,7 +83,13 @@ vpa:
           cpu: 2
           memory: 2Gi
 
-env: []
+env:
+  - name: GRAPHQL_FEDERATION_ENABLED
+    value: "false"
+  - name: GRAPHQL_ROUTER_URL
+    value: ""
+  - name: GRAPHQL_SUBGRAPHS
+    value: ""
 
 configMaps: []
 sealedSecrets: []

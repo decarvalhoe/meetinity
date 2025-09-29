@@ -6,6 +6,7 @@ from prometheus_client import (  # type: ignore[import-not-found]
     CONTENT_TYPE_LATEST,
     CollectorRegistry,
     Counter,
+    Gauge,
     Histogram,
     generate_latest,
 )
@@ -53,6 +54,13 @@ class MetricsRegistry:
             ("service", "reason"),
             registry=self.registry,
         )
+        self.graphql_supergraph_info = Gauge(
+            "api_gateway_graphql_supergraph_info",
+            "Version information for the active GraphQL supergraph.",
+            ("version",),
+            registry=self.registry,
+        )
+        self._current_supergraph_version: str | None = None
 
     def observe_http_request(
         self,
@@ -81,6 +89,14 @@ class MetricsRegistry:
 
     def record_upstream_failure(self, *, service: str, reason: str) -> None:
         self.upstream_failures.labels(service=service, reason=reason).inc()
+
+    def record_supergraph_version(self, version: str) -> None:
+        """Expose the current GraphQL supergraph version as a gauge."""
+
+        if self._current_supergraph_version and self._current_supergraph_version != version:
+            self.graphql_supergraph_info.labels(version=self._current_supergraph_version).set(0)
+        self.graphql_supergraph_info.labels(version=version).set(1)
+        self._current_supergraph_version = version
 
     def format_http_totals(self) -> bytes:
         """Return a Prometheus exposition snippet with ordered labels for totals."""

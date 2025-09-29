@@ -21,6 +21,11 @@ except Exception:  # pragma: no cover - optional dependency
 
 from requests.adapters import HTTPAdapter
 
+from .graphql import (
+    FederatedGraphQLGateway,
+    SchemaCompositionError,
+    load_subgraph_definitions,
+)
 from .middleware.logging import setup_request_logging
 from .middleware.resilience import ResilienceMiddleware
 from .observability import (
@@ -558,6 +563,13 @@ def create_app() -> Flask:
     app.config["ANALYTICS_SERVICE_STATIC_INSTANCES"] = _get_env(
         "ANALYTICS_SERVICE_STATIC_INSTANCES", ""
     ) or ""
+    app.config["PAYMENT_SERVICE_URL"] = _get_env("PAYMENT_SERVICE_URL", "") or ""
+    app.config["PAYMENT_SERVICE_NAME"] = _get_env(
+        "PAYMENT_SERVICE_NAME", "payment-service"
+    ) or "payment-service"
+    app.config["PAYMENT_SERVICE_STATIC_INSTANCES"] = _get_env(
+        "PAYMENT_SERVICE_STATIC_INSTANCES", ""
+    ) or ""
     app.config["SERVICE_DISCOVERY_BACKEND"] = _get_env(
         "SERVICE_DISCOVERY_BACKEND", "static"
     ) or "static"
@@ -686,6 +698,25 @@ def create_app() -> Flask:
     app.config["OPENAPI_OUTPUT_PATH"] = _get_env(
         "OPENAPI_OUTPUT_PATH", os.path.join(os.getcwd(), "docs", "openapi.yaml")
     ) or os.path.join(os.getcwd(), "docs", "openapi.yaml")
+
+    service_root = project_root
+    repo_root = project_root.parent.parent
+    supergraph_dir_default = os.path.join(service_root, "deploy", "graphql")
+    contract_dir_default = os.path.join(repo_root, "contracts", "graphql")
+    app.config["GRAPHQL_FEDERATION_ENABLED"] = _parse_bool(
+        _get_env("GRAPHQL_FEDERATION_ENABLED"), False
+    )
+    app.config["GRAPHQL_ROUTER_URL"] = _get_env("GRAPHQL_ROUTER_URL", "") or ""
+    app.config["GRAPHQL_SUBGRAPHS_RAW"] = _get_env("GRAPHQL_SUBGRAPHS", "") or ""
+    app.config["GRAPHQL_SUPERGRAPH_DIR"] = _get_env(
+        "GRAPHQL_SUPERGRAPH_DIR", supergraph_dir_default
+    ) or supergraph_dir_default
+    app.config["GRAPHQL_CONTRACT_DIR"] = _get_env(
+        "GRAPHQL_CONTRACT_DIR", contract_dir_default
+    ) or contract_dir_default
+    app.config["GRAPHQL_CONTRACT_AUTOPUBLISH"] = _parse_bool(
+        _get_env("GRAPHQL_CONTRACT_AUTOPUBLISH"), True
+    )
 
     app.config["LOG_LEVEL_NAME"] = (_get_env("LOG_LEVEL", "INFO") or "INFO").upper()
     app.config["LOG_AGGREGATORS_RAW"] = _get_env("LOG_AGGREGATORS", "") or ""
@@ -829,6 +860,7 @@ def create_app() -> Flask:
     register_shutdown_task("http_session", session.close)
     _configure_cache(app)
     _configure_compression(app)
+    _configure_graphql_federation(app)
 
     from .utils.openapi import generate_openapi_document
     from .routes.docs import create_docs_blueprint
@@ -860,6 +892,55 @@ def create_app() -> Flask:
         return error_response(500, "Internal Server Error")
 
     return app
+
+
+def _configure_graphql_federation(app: Flask) -> None:
+    if not app.config.get("GRAPHQL_FEDERATION_ENABLED", False):
+        return
+
+    hierarchical = app.config.get("HIERARCHICAL_CONFIG", {})
+    raw_definitions = str(app.config.get("GRAPHQL_SUBGRAPHS_RAW", ""))
+    try:
+        subgraphs = load_subgraph_definitions(raw_definitions, hierarchical=hierarchical)
+    except SchemaCompositionError as exc:
+        app.logger.error("GraphQL federation misconfigured: %s", exc)
+        return
+
+    if not subgraphs:
+        app.logger.warning("GraphQL federation enabled but no subgraphs configured")
+        return
+
+    metrics = app.extensions.get("metrics")
+    session = app.extensions.get("http_session")
+    try:
+        federation = FederatedGraphQLGateway(
+            subgraphs=subgraphs,
+            supergraph_dir=Path(app.config["GRAPHQL_SUPERGRAPH_DIR"]),
+            contract_dir=Path(app.config["GRAPHQL_CONTRACT_DIR"]),
+            session=session,
+            metrics=metrics,
+        )
+        schema = federation.refresh_schema(force=True)
+        if app.config.get("GRAPHQL_CONTRACT_AUTOPUBLISH", True):
+            federation.publish_contract()
+    except SchemaCompositionError as exc:
+        app.logger.error("Failed to initialise GraphQL federation: %s", exc)
+        return
+
+    app.extensions["graphql_federation"] = federation
+    app.config["GRAPHQL_SCHEMA_VERSION"] = schema.version
+    app.config["GRAPHQL_SUPERGRAPH_PATH"] = str(schema.supergraph_path)
+    app.config["GRAPHQL_MANIFEST_PATH"] = str(schema.manifest_path)
+
+    from .routes import PROXY_ROUTE_DEFINITIONS, register_graphql_blueprint
+
+    missing = federation.validate_rest_mappings(PROXY_ROUTE_DEFINITIONS)
+    if missing:
+        app.logger.warning(
+            "GraphQL federation missing REST parity for: %s", ", ".join(sorted(missing))
+        )
+
+    register_graphql_blueprint(app)
 
 
 if __name__ == "__main__":
