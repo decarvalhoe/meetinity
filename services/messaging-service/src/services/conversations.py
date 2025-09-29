@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
+from flask import current_app
 from sqlalchemy import Select, select
 from sqlalchemy.orm import Session, aliased, joinedload
 
@@ -12,14 +13,16 @@ from ..errors import (
     ConversationNotFoundError,
     ValidationError,
 )
+from ..integrations import ModerationClient, ModerationResponse
 from ..models import Conversation, ConversationParticipant, Message
 
 
 class ConversationService:
     """High level conversation operations backed by SQLAlchemy."""
 
-    def __init__(self, session: Session):
+    def __init__(self, session: Session, moderation_client: ModerationClient | None = None):
         self.session = session
+        self.moderation_client = moderation_client
 
     # ------------------------------------------------------------------
     # Conversation queries
@@ -81,11 +84,16 @@ class ConversationService:
                 raise ValidationError(
                     "Validation échouée.", {"initial_message": ["Le message initial dépasse 1000 caractères."]}
                 )
+            moderation = self._evaluate_moderation(
+                text, conversation.id, user_id, field="initial_message"
+            )
             message_obj = Message(
                 conversation_id=conversation.id,
                 sender_id=user_id,
                 text=text,
                 created_at=_utcnow(),
+                moderation_status=moderation.status if moderation else "approved",
+                moderation_labels=moderation.labels if moderation else None,
             )
             self.session.add(message_obj)
             creator_participant.last_read_at = message_obj.created_at
@@ -115,11 +123,14 @@ class ConversationService:
                 "Validation échouée.", {"text": ["Le message ne peut pas dépasser 1000 caractères."]}
             )
 
+        moderation = self._evaluate_moderation(cleaned, conversation.id, user_id, field="text")
         message = Message(
             conversation_id=conversation.id,
             sender_id=user_id,
             text=cleaned,
             created_at=_utcnow(),
+            moderation_status=moderation.status if moderation else "approved",
+            moderation_labels=moderation.labels if moderation else None,
         )
         self.session.add(message)
         participant.last_read_at = message.created_at
@@ -208,7 +219,33 @@ class ConversationService:
             "sender_id": message.sender_id,
             "text": message.text,
             "timestamp": message.created_at.isoformat().replace("+00:00", "Z"),
+            "moderation_status": message.moderation_status,
+            "moderation_labels": message.moderation_labels or {},
         }
+
+    def _evaluate_moderation(
+        self, text: str, conversation_id: int, user_id: int, *, field: str
+    ) -> ModerationResponse | None:
+        if not self.moderation_client or not self.moderation_client.is_enabled():
+            return None
+
+        try:
+            response = self.moderation_client.review_message(
+                text,
+                conversation_id=conversation_id,
+                user_id=user_id,
+            )
+        except Exception as exc:  # pragma: no cover - network issues
+            current_app.logger.warning("Moderation check failed", exc_info=exc)
+            return None
+
+        if response and response.status == "blocked":
+            self.session.rollback()
+            raise ValidationError(
+                "Validation échouée.",
+                {field: ["Le message a été bloqué par la modération automatique."]},
+            )
+        return response
 
 
 def _utcnow() -> datetime:

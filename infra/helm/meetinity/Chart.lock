@@ -17,5 +17,8 @@ dependencies:
 - name: notification-service
   repository: file://charts/notification-service
   version: 0.1.0
-digest: sha256:c83d873b1cd9fea305718de3cd21b8e56cda6d85efdcca5172ec4339fefe518c
-generated: "2025-09-29T06:03:48.40342503Z"
+- name: moderation-service
+  repository: file://charts/moderation-service
+  version: 0.1.0
+digest: sha256:0000000000000000000000000000000000000000000000000000000000000000
+generated: "2024-05-22T00:00:00Z"

@@ -276,6 +276,7 @@ event-service:
           type: Opaque
           data:
             EVENT_CATALOG_URL: '{{ .data.catalog_url }}'
+            MODERATION_SERVICE_URL: '{{ .data.moderation_url | default "http://moderation-service:8080" }}'
 
 notification-service:
   environment: staging
@@ -319,3 +320,47 @@ notification-service:
             REDIS_URL: '{{ .data.redis_url | default "redis://redis:6379/0" }}'
             KAFKA_BOOTSTRAP_SERVERS: '{{ .data.kafka_bootstrap | default "kafka:9092" }}'
             KAFKA_NOTIFICATION_TOPIC: '{{ .data.kafka_topic | default "notifications.dispatch" }}'
+
+moderation-service:
+  environment: staging
+  domain: staging.meetinity.com
+  replicaCount: 2
+  autoscaling:
+    minReplicas: 2
+    maxReplicas: 3
+    metrics:
+      - type: Resource
+        resource:
+          name: cpu
+          target:
+            type: Utilization
+            averageUtilization: 55
+      - type: Resource
+        resource:
+          name: memory
+          target:
+            type: Utilization
+            averageUtilization: 65
+  resources:
+    requests:
+      cpu: 200m
+      memory: 256Mi
+    limits:
+      cpu: 400m
+      memory: 512Mi
+  podDisruptionBudget:
+    minAvailable: 1
+  vaultSecrets:
+    - name: moderation-service-env
+      path: kv/data/staging/moderation-service/app
+      secretStoreRef:
+        name: vault-staging
+      target:
+        template:
+          type: Opaque
+          data:
+            DATABASE_URL: '{{ .data.database_url | default "" }}'
+            REDIS_URL: '{{ .data.redis_url | default "redis://redis:6379/1" }}'
+            KAFKA_BOOTSTRAP_SERVERS: '{{ .data.kafka_bootstrap | default "kafka:9092" }}'
+            KAFKA_MODERATION_TOPIC: '{{ .data.kafka_topic | default "moderation.events" }}'
+            ML_CLASSIFIER_URL: '{{ .data.ml_classifier_url | default "" }}'

@@ -16,6 +16,7 @@ def create_app(config: dict[str, object] | None = None) -> Flask:
 
     default_config = {
         "DATABASE_URL": os.getenv("DATABASE_URL", ""),
+        "MODERATION_SERVICE_URL": os.getenv("MODERATION_SERVICE_URL"),
     }
     app.config.from_mapping(default_config)
     if config:

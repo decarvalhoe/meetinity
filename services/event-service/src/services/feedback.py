@@ -3,10 +3,12 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional, Tuple
 
+from flask import current_app
 from sqlalchemy.orm import Session
 
 from src.repositories.events import EventRepository
 from src.repositories.feedback import FeedbackRepository
+from src.integrations.moderation_service import ModerationServiceClient
 
 __all__ = ["FeedbackService", "FeedbackValidationError", "FeedbackNotFoundError"]
 
@@ -29,16 +31,58 @@ class FeedbackService:
 
     ALLOWED_STATUSES = {"pending", "approved", "rejected"}
 
-    def __init__(self, session: Session) -> None:
+    def __init__(
+        self,
+        session: Session,
+        moderation_client: ModerationServiceClient | None = None,
+    ) -> None:
         self.session = session
         self.event_repository = EventRepository(session)
         self.repository = FeedbackRepository(session)
+        self.moderation_client = moderation_client
 
     def submit_feedback(self, event_id: int, payload: Dict[str, Any]) -> Dict[str, Any]:
         self._ensure_event_exists(event_id)
         clean = self._validate_submission_payload(payload)
-        feedback = self.repository.create(event_id=event_id, **clean)
+        moderation_result: Dict[str, Any] | None = None
+        status = "pending"
+        metadata = dict(clean.get("metadata") or {})
+
+        comment = clean.get("comment")
+        if comment and self.moderation_client and self.moderation_client.is_enabled():
+            try:
+                moderation_result = self.moderation_client.check_feedback(
+                    event_id=event_id,
+                    comment=comment,
+                    metadata=metadata,
+                )
+            except Exception as exc:  # pragma: no cover - network path
+                current_app.logger.warning("Feedback moderation unavailable", exc_info=exc)
+            else:
+                if moderation_result:
+                    metadata["moderation"] = moderation_result
+                    status = _map_filter_status(moderation_result.get("status"))
+
+        feedback = self.repository.create(
+            event_id=event_id,
+            metadata=metadata,
+            status=status,
+            participant_email=clean.get("participant_email"),
+            participant_name=clean.get("participant_name"),
+            rating=clean.get("rating"),
+            comment=comment,
+            sentiment=clean.get("sentiment"),
+        )
         self.session.commit()
+
+        if moderation_result and self.moderation_client:
+            self.moderation_client.create_report(
+                event_id=event_id,
+                feedback_id=feedback.id,
+                reporter_id=None,
+                summary=comment,
+                filter_result=moderation_result,
+            )
         return self._serialize_feedback(feedback)
 
     def list_feedback(self, event_id: int) -> Dict[str, Any]:
@@ -175,3 +219,11 @@ class FeedbackService:
             "moderated_at": feedback.moderated_at.isoformat() if feedback.moderated_at else None,
             "created_at": feedback.created_at.isoformat(),
         }
+
+
+def _map_filter_status(status: Optional[str]) -> str:
+    if status == "blocked":
+        return "rejected"
+    if status == "approved":
+        return "approved"
+    return "pending"
