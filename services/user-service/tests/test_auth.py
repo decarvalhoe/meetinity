@@ -8,7 +8,6 @@ import pytest
 from src.auth.oauth import generate_nonce, generate_state
 from src.db.session import session_scope
 from src.models.repositories import RepositoryError, UserRepository
-from src.services.cache import CacheService
 
 
 class DummyResponse:
@@ -200,33 +199,13 @@ def test_profile_caching(monkeypatch, client):
             return self.data.get(key)
 
         def setex(self, key, ttl, value):
-            self.data[key] = value if isinstance(value, str) else str(value)
+            self.data[key] = value
 
-        def set(self, key, value):
-            self.data[key] = value if isinstance(value, str) else str(value)
-
-        def delete(self, *keys):
-            for key in keys:
-                self.data.pop(key, None)
-
-        def scan_iter(self, match=None):
-            keys = list(self.data.keys())
-            if match is None:
-                for key in keys:
-                    yield key
-                return
-            if isinstance(match, str) and match.endswith("*"):
-                prefix = match[:-1]
-                for key in keys:
-                    if key.startswith(prefix):
-                        yield key
-            elif match in self.data:
-                yield match
+        def delete(self, key):
+            self.data.pop(key, None)
 
     fake_redis = FakeRedis()
-    app = client.application
-    previous_cache = app.extensions.get("cache_service")
-    app.extensions["cache_service"] = CacheService(fake_redis, 60)
+    client.application.extensions["redis_client"] = fake_redis
 
     with session_scope() as session:
         repo = UserRepository(session)
@@ -262,10 +241,7 @@ def test_profile_caching(monkeypatch, client):
         headers={"Authorization": "Bearer dummy"},
     )
     assert second.status_code == 200
-    if previous_cache is not None:
-        app.extensions["cache_service"] = previous_cache
-    else:
-        app.extensions.pop("cache_service", None)
+    client.application.extensions.pop("redis_client", None)
 
 
 def test_profile_repository_error(monkeypatch, client):
