@@ -13,6 +13,16 @@ output "cluster_certificate_authority_data" {
   value       = module.eks.cluster_certificate_authority_data
 }
 
+output "cluster_security_group_id" {
+  description = "Security group ID attached to the EKS control plane."
+  value       = module.eks.cluster_security_group_id
+}
+
+output "node_security_group_id" {
+  description = "Security group ID used by the managed node group."
+  value       = module.eks.node_security_group_id
+}
+
 output "node_group_role_arn" {
   description = "IAM role ARN for the default node group."
   value       = module.eks.eks_managed_node_groups["default"].iam_role_arn

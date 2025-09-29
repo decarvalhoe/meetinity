@@ -112,3 +112,73 @@ variable "default_tls_secret_name" {
   type        = string
   default     = "meetinity-ingress-tls"
 }
+
+variable "database_config" {
+  description = "Configuration for the managed PostgreSQL cluster."
+  type = object({
+    name                         = string
+    engine_version               = string
+    db_name                      = string
+    master_username              = string
+    instance_class               = string
+    instance_count               = number
+    backup_retention_period      = number
+    preferred_backup_window      = string
+    preferred_maintenance_window = string
+    allowed_cidr_blocks          = list(string)
+    allowed_security_group_ids   = list(string)
+    kms_key_id                   = optional(string)
+    performance_insights_enabled = bool
+  })
+  default = {
+    name                         = "postgres"
+    engine_version               = "15.4"
+    db_name                      = "meetinity"
+    master_username              = "meetinity_app"
+    instance_class               = "db.r6g.large"
+    instance_count               = 2
+    backup_retention_period      = 7
+    preferred_backup_window      = "03:00-04:00"
+    preferred_maintenance_window = "sun:04:00-sun:05:00"
+    allowed_cidr_blocks          = []
+    allowed_security_group_ids   = []
+    kms_key_id                   = null
+    performance_insights_enabled = true
+  }
+}
+
+variable "redis_config" {
+  description = "Configuration for the managed Redis cluster."
+  type = object({
+    name                       = string
+    engine_version             = string
+    node_type                  = string
+    num_cache_clusters         = number
+    port                       = number
+    parameter_group_family     = string
+    allowed_cidr_blocks        = list(string)
+    allowed_security_group_ids = list(string)
+    maintenance_window         = string
+    snapshot_retention_limit   = number
+    apply_immediately          = bool
+    transit_encryption_enabled = bool
+    at_rest_encryption_enabled = bool
+    auto_minor_version_upgrade = bool
+  })
+  default = {
+    name                       = "redis"
+    engine_version             = "7.1"
+    node_type                  = "cache.r6g.large"
+    num_cache_clusters         = 2
+    port                       = 6379
+    parameter_group_family     = "redis7"
+    allowed_cidr_blocks        = []
+    allowed_security_group_ids = []
+    maintenance_window         = "sun:05:00-sun:06:00"
+    snapshot_retention_limit   = 7
+    apply_immediately          = false
+    transit_encryption_enabled = true
+    at_rest_encryption_enabled = true
+    auto_minor_version_upgrade = true
+  }
+}

@@ -37,3 +37,55 @@ output "ebs_csi_role_arn" {
   description = "IAM role ARN associated with the EBS CSI controller service account."
   value       = module.eks.ebs_csi_role_arn
 }
+
+output "database_endpoint" {
+  description = "Writer endpoint for the managed PostgreSQL cluster."
+  value       = module.database.endpoint
+}
+
+output "database_reader_endpoint" {
+  description = "Reader endpoint for the managed PostgreSQL cluster."
+  value       = module.database.reader_endpoint
+}
+
+output "database_port" {
+  description = "Port exposed by the PostgreSQL service."
+  value       = module.database.port
+}
+
+output "database_name" {
+  description = "Default database created in the PostgreSQL cluster."
+  value       = module.database.database_name
+}
+
+output "database_username" {
+  description = "Master username configured for PostgreSQL."
+  value       = module.database.username
+}
+
+output "database_password" {
+  description = "Master password generated for PostgreSQL."
+  value       = module.database.password
+  sensitive   = true
+}
+
+output "redis_primary_endpoint" {
+  description = "Primary endpoint for the Redis replication group."
+  value       = module.redis.primary_endpoint
+}
+
+output "redis_reader_endpoint" {
+  description = "Reader endpoint for the Redis replication group."
+  value       = module.redis.reader_endpoint
+}
+
+output "redis_port" {
+  description = "Port exposed by the Redis service."
+  value       = module.redis.port
+}
+
+output "redis_auth_token" {
+  description = "Authentication token for Redis."
+  value       = module.redis.auth_token
+  sensitive   = true
+}

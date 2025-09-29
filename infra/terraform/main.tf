@@ -14,6 +14,10 @@ terraform {
       source  = "hashicorp/helm"
       version = "~> 2.11"
     }
+    random = {
+      source  = "hashicorp/random"
+      version = "~> 3.5"
+    }
   }
 }
 
@@ -69,6 +73,55 @@ module "eks" {
   cluster_admin_role_name      = var.cluster_admin_role_name
   cluster_admin_principal_arns = var.cluster_admin_principal_arns
   tags               = local.default_tags
+}
+
+module "database" {
+  source = "./modules/rds"
+
+  name                         = "${var.environment}-${var.database_config.name}"
+  engine_version               = var.database_config.engine_version
+  db_name                      = var.database_config.db_name
+  master_username              = var.database_config.master_username
+  instance_class               = var.database_config.instance_class
+  instance_count               = var.database_config.instance_count
+  subnet_ids                   = module.vpc.private_subnet_ids
+  vpc_id                       = module.vpc.vpc_id
+  allowed_cidr_blocks          = var.database_config.allowed_cidr_blocks
+  allowed_security_group_ids   = distinct(concat(var.database_config.allowed_security_group_ids, [
+    module.eks.node_security_group_id,
+    module.eks.cluster_security_group_id,
+  ]))
+  backup_retention_period      = var.database_config.backup_retention_period
+  preferred_backup_window      = var.database_config.preferred_backup_window
+  preferred_maintenance_window = var.database_config.preferred_maintenance_window
+  kms_key_id                   = try(var.database_config.kms_key_id, null)
+  performance_insights_enabled = var.database_config.performance_insights_enabled
+  tags                         = local.default_tags
+}
+
+module "redis" {
+  source = "./modules/elasticache"
+
+  name                       = "${var.environment}-${var.redis_config.name}"
+  engine_version             = var.redis_config.engine_version
+  node_type                  = var.redis_config.node_type
+  num_cache_clusters         = var.redis_config.num_cache_clusters
+  subnet_ids                 = module.vpc.private_subnet_ids
+  vpc_id                     = module.vpc.vpc_id
+  port                       = var.redis_config.port
+  parameter_group_family     = var.redis_config.parameter_group_family
+  allowed_cidr_blocks        = var.redis_config.allowed_cidr_blocks
+  allowed_security_group_ids = distinct(concat(var.redis_config.allowed_security_group_ids, [
+    module.eks.node_security_group_id,
+    module.eks.cluster_security_group_id,
+  ]))
+  maintenance_window         = var.redis_config.maintenance_window
+  snapshot_retention_limit   = var.redis_config.snapshot_retention_limit
+  apply_immediately          = var.redis_config.apply_immediately
+  transit_encryption_enabled = var.redis_config.transit_encryption_enabled
+  at_rest_encryption_enabled = var.redis_config.at_rest_encryption_enabled
+  auto_minor_version_upgrade = var.redis_config.auto_minor_version_upgrade
+  tags                       = local.default_tags
 }
 
 resource "kubernetes_namespace" "monitoring" {
