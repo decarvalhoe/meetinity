@@ -1,0 +1,73 @@
+clusterName: meetinity-logging
+esMajorVersion: 8
+fullnameOverride: elasticsearch
+
+nodeSets:
+  - name: data
+    count: 3
+    config:
+      node.roles: [ master, data_hot, ingest ]
+      xpack.security.enabled: true
+      xpack.security.transport.ssl.enabled: true
+      xpack.security.http.ssl.enabled: true
+      xpack.monitoring.collection.enabled: true
+      cluster.routing.allocation.disk.threshold_enabled: true
+      cluster.routing.allocation.disk.watermark.low: 75%
+      cluster.routing.allocation.disk.watermark.high: 85%
+      cluster.routing.allocation.disk.watermark.flood_stage: 90%
+    podTemplate:
+      metadata:
+        labels:
+          app: elasticsearch
+          stack: logging
+      spec:
+        containers:
+          - name: elasticsearch
+            resources:
+              requests:
+                cpu: 500m
+                memory: 4Gi
+              limits:
+                cpu: 2
+                memory: 8Gi
+            env:
+              - name: ES_JAVA_OPTS
+                value: -Xms2g -Xmx2g
+        nodeSelector:
+          kubernetes.io/os: linux
+        tolerations:
+          - key: node-role.kubernetes.io/control-plane
+            operator: Exists
+            effect: NoSchedule
+        affinity:
+          podAntiAffinity:
+            preferredDuringSchedulingIgnoredDuringExecution:
+              - weight: 100
+                podAffinityTerm:
+                  labelSelector:
+                    matchLabels:
+                      app: elasticsearch
+                  topologyKey: kubernetes.io/hostname
+    volumeClaimTemplates:
+      - metadata:
+          name: elasticsearch-data
+        spec:
+          accessModes: [ "ReadWriteOnce" ]
+          storageClassName: fast
+          resources:
+            requests:
+              storage: 200Gi
+
+service:
+  type: ClusterIP
+  ports:
+    - name: http
+      port: 9200
+      protocol: TCP
+    - name: transport
+      port: 9300
+      protocol: TCP
+
+secret:
+  create: true
+  password: ${ELASTIC_PASSWORD:-changeme}

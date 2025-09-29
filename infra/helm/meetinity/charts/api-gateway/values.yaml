@@ -96,3 +96,23 @@ livenessProbe:
 readinessProbe:
   path: /ready
   port: http
+
+observability:
+  tracing:
+    enabled: true
+    serviceName: api-gateway
+    propagators:
+      - tracecontext
+      - baggage
+      - b3multi
+    sampler:
+      type: parentbased_traceidratio
+      ratio: 0.2
+    exporter:
+      endpoint: "http://jaeger-collector.observability.svc.cluster.local:4317"
+      protocol: grpc
+      headers: {}
+    resourceAttributes:
+      service.team: platform
+    agent:
+      enabled: true

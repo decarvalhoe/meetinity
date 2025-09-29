@@ -98,3 +98,18 @@ livenessProbe:
 readinessProbe:
   path: /ready
   port: http
+
+observability:
+  tracing:
+    enabled: true
+    serviceName: user-service
+    sampler:
+      type: parentbased_traceidratio
+      ratio: 0.25
+    exporter:
+      endpoint: "http://jaeger-collector.observability.svc.cluster.local:4317"
+      protocol: grpc
+    resourceAttributes:
+      service.domain: users
+    agent:
+      enabled: true

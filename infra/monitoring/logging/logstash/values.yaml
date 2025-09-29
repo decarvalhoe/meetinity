@@ -1,0 +1,103 @@
+fullnameOverride: logstash
+
+replicaCount: 2
+
+image:
+  repository: docker.elastic.co/logstash/logstash
+  tag: 8.12.0
+  pullPolicy: IfNotPresent
+
+podAnnotations:
+  traffic.sidecar.istio.io/excludeOutboundPorts: "5044"
+
+resources:
+  requests:
+    cpu: 500m
+    memory: 1Gi
+  limits:
+    cpu: 2
+    memory: 4Gi
+
+service:
+  type: ClusterIP
+  ports:
+    - name: beats
+      port: 5044
+      protocol: TCP
+    - name: http
+      port: 9600
+      protocol: TCP
+
+persistence:
+  enabled: true
+  size: 20Gi
+  storageClass: fast
+
+logstashConfig:
+  logstash.yml: |
+    http.host: 0.0.0.0
+    xpack.monitoring.enabled: true
+    pipeline.ecs_compatibility: disabled
+    queue.type: persisted
+
+logstashPipeline:
+  meetinity.conf: |
+    input {
+      beats {
+        port => 5044
+        ssl => true
+        ssl_certificate_authorities => ["/usr/share/logstash/config/certs/ca.crt"]
+        ssl_certificate => "/usr/share/logstash/config/certs/tls.crt"
+        ssl_key => "/usr/share/logstash/config/certs/tls.key"
+        ssl_verify_mode => "none"
+      }
+    }
+
+    filter {
+      if [kubernetes][namespace_name] =~ /^(kube-system|logging)$/ {
+        drop { }
+      }
+
+      mutate {
+        add_field => { "[@metadata][environment]" => "%{[kubernetes][namespace_labels][environment]}" }
+        rename => { "log" => "message" }
+      }
+
+      json {
+        source => "message"
+        target => "json"
+        skip_on_invalid_json => true
+      }
+
+      date {
+        match => ["[json][timestamp]", "ISO8601", "UNIX"]
+        target => "@timestamp"
+      }
+
+      if [json][level] {
+        mutate { replace => { "[json][level]" => "%{[json][level]}" } }
+      }
+    }
+
+    output {
+      elasticsearch {
+        hosts => ["https://elasticsearch-master.logging.svc.cluster.local:9200"]
+        index => "logs-meetinity-%{[@metadata][environment]}-%{+YYYY.MM.dd}"
+        user => "elastic"
+        password => "${ELASTIC_PASSWORD}"
+        ssl => true
+        cacert => "/usr/share/logstash/config/certs/ca.crt"
+      }
+    }
+
+secretMounts:
+  - name: logstash-tls
+    secretName: logstash-tls
+    path: /usr/share/logstash/config/certs
+
+extraEnvs:
+  - name: ELASTIC_PASSWORD
+    valueFrom:
+      secretKeyRef:
+        name: elastic-credentials
+        key: password

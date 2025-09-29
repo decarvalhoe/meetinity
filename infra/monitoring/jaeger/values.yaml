@@ -1,0 +1,89 @@
+strategy: production
+
+defaults:
+  image:
+    tag: 1.52.0
+  resources:
+    requests:
+      cpu: 200m
+      memory: 256Mi
+    limits:
+      cpu: 1
+      memory: 512Mi
+
+collector:
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 5
+    targetCPUUtilizationPercentage: 75
+  service:
+    otlp:
+      grpc:
+        enabled: true
+        port: 4317
+      http:
+        enabled: true
+        port: 4318
+    jaegerGrpc:
+      enabled: true
+      port: 14250
+  options:
+    log-level: info
+    collector.otlp.grpc.max-recv-msg-size: 16777216
+  ingress:
+    enabled: false
+
+query:
+  ingress:
+    enabled: true
+    className: nginx
+    hosts:
+      - jaeger.meetinity.com
+    tls:
+      - hosts:
+          - jaeger.meetinity.com
+        secretName: jaeger-tls
+  resources:
+    requests:
+      cpu: 200m
+      memory: 512Mi
+    limits:
+      cpu: 1
+      memory: 1Gi
+
+storage:
+  type: elasticsearch
+  elasticsearch:
+    scheme: https
+    host: elasticsearch-master.logging.svc.cluster.local
+    port: 9200
+    useExistingSecret: true
+    existingSecret: elastic-credentials
+    existingSecretKey: password
+    user: jaeger_writer
+    indexPrefix: jaeger-meetinity
+
+agent:
+  strategy: DaemonSet
+  enabled: true
+  config:
+    collector:
+      host: jaeger-collector.observability.svc.cluster.local
+      port: 14250
+      protocol: grpc
+  daemonset:
+    resources:
+      requests:
+        cpu: 50m
+        memory: 64Mi
+      limits:
+        cpu: 200m
+        memory: 128Mi
+
+spark:
+  enabled: false
+
+provisionDataStore:
+  cassandra: false
+  elasticsearch: false
