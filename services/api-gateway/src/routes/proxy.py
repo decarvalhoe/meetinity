@@ -25,7 +25,14 @@ from ..middleware.resilience import (
     UpstreamServiceError,
 )
 from ..middleware.jwt import require_jwt
-from ..services.registry import ServiceInstance, ServiceRegistry
+from ..services.registry import (
+    EVENT_SERVICE_CONFIG,
+    MATCHING_SERVICE_CONFIG,
+    USER_SERVICE_CONFIG,
+    ServiceInstance,
+    ServiceRegistry,
+    UpstreamServiceConfig,
+)
 from ..utils.responses import error_response
 from ..performance.cache import Cache, SingleFlight
 
@@ -40,6 +47,7 @@ class ProxyRouteDefinition:
     gateway_path: str
     upstream_prefix: str
     methods: tuple[str, ...]
+    upstream_service: UpstreamServiceConfig = USER_SERVICE_CONFIG
     requires_jwt: bool = False
     rate_limit_config: str | None = None
     summary: str = ""
@@ -78,17 +86,41 @@ PROXY_ROUTE_DEFINITIONS: tuple[ProxyRouteDefinition, ...] = (
         description="Expose profile operations for authenticated users.",
         tags=("Users",),
     ),
+    ProxyRouteDefinition(
+        name="events",
+        gateway_path="/api/events",
+        upstream_prefix="events",
+        methods=("GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"),
+        upstream_service=EVENT_SERVICE_CONFIG,
+        requires_jwt=True,
+        rate_limit_config="RATE_LIMIT_EVENTS",
+        summary="Event management proxy",
+        description="Forward event API traffic to the upstream event service.",
+        tags=("Events",),
+    ),
+    ProxyRouteDefinition(
+        name="matching",
+        gateway_path="/api/matching",
+        upstream_prefix="matching",
+        methods=("GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"),
+        upstream_service=MATCHING_SERVICE_CONFIG,
+        requires_jwt=True,
+        rate_limit_config="RATE_LIMIT_MATCHING",
+        summary="Matching proxy",
+        description="Proxy matchmaking requests to the upstream matching service.",
+        tags=("Matching",),
+    ),
 )
 
 
-def _build_proxy_view(upstream_prefix: str) -> Callable[[str], Response]:
-    normalized_prefix = upstream_prefix.strip("/")
+def _build_proxy_view(definition: ProxyRouteDefinition) -> Callable[[str], Response]:
+    normalized_prefix = definition.upstream_prefix.strip("/")
 
     def _view(subpath: str = "") -> Response:
         target = normalized_prefix
         if subpath:
             target = f"{normalized_prefix}/{subpath}" if normalized_prefix else subpath
-        return _forward(target)
+        return _forward(target, definition)
 
     return _view
 
@@ -116,7 +148,7 @@ def create_proxy_blueprint(version: str | None, default_version: str) -> Bluepri
         g.api_version_explicit = explicit_version
 
     for definition in PROXY_ROUTE_DEFINITIONS:
-        view = _build_proxy_view(definition.upstream_prefix)
+        view = _build_proxy_view(definition)
         view.__name__ = f"proxy_{definition.name}_{version or 'default'}"
         view.__doc__ = definition.description or view.__doc__
         if definition.requires_jwt:
@@ -172,16 +204,20 @@ def _build_cache_key(params: Sequence[tuple[str, str]], vary_headers: Sequence[s
     return "|".join(parts)
 
 
-def _forward(path: str) -> Response:
-    """Forward a request to the upstream user service."""
+def _forward(path: str, definition: ProxyRouteDefinition) -> Response:
+    """Forward a request to the configured upstream service."""
 
     metrics = current_app.extensions.get("metrics")
+    service_config = definition.upstream_service
+    service_name = str(
+        current_app.config.get(service_config.name_key, service_config.default_service_name)
+    ) or service_config.default_service_name
     span_attributes = {
         "http.method": request.method,
         "http.target": request.full_path.rstrip("?") or request.path,
         "http.route": getattr(request.url_rule, "rule", request.path),
         "http.request_id": getattr(g, "request_id", None),
-        "upstream.service": current_app.config.get("USER_SERVICE_NAME", "user-service"),
+        "upstream.service": service_name,
     }
     span_attributes = {k: v for k, v in span_attributes.items() if v is not None}
 
@@ -240,7 +276,6 @@ def _forward(path: str) -> Response:
         resilience: ResilienceMiddleware | None = current_app.extensions.get(
             "resilience_middleware"
         )
-        service_name = current_app.config.get("USER_SERVICE_NAME", "user-service")
         strategy_name = current_app.config.get("LOAD_BALANCER_STRATEGY", "round_robin")
         session = _get_http_session()
         cache: Cache | None = current_app.extensions.get("response_cache")
@@ -336,7 +371,7 @@ def _forward(path: str) -> Response:
                     strategy_name=strategy_name,
                     request_func=perform_request,
                 )
-            base_url = current_app.config.get("USER_SERVICE_URL", "").rstrip("/")
+            base_url = current_app.config.get(service_config.url_key, "").rstrip("/")
             if not base_url:
                 span.set_status(
                     Status(

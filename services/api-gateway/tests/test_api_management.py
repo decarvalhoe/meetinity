@@ -13,9 +13,13 @@ from src.app import create_app  # noqa: E402
 
 def _configure_base_env(monkeypatch):
     monkeypatch.setenv("USER_SERVICE_URL", "http://upstream")
+    monkeypatch.setenv("EVENT_SERVICE_URL", "http://events")
+    monkeypatch.setenv("MATCHING_SERVICE_URL", "http://matching")
     monkeypatch.setenv("CORS_ORIGINS", "")
     monkeypatch.setenv("JWT_SECRET", "secret")
     monkeypatch.setenv("RATE_LIMIT_AUTH", "20/minute")
+    monkeypatch.setenv("RATE_LIMIT_EVENTS", "20/minute")
+    monkeypatch.setenv("RATE_LIMIT_MATCHING", "20/minute")
     monkeypatch.setenv("RESILIENCE_BACKOFF_FACTOR", "0")
 
 

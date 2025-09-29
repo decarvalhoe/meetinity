@@ -8,6 +8,55 @@ from dataclasses import dataclass
 from typing import Callable, Dict, List, Mapping, MutableSequence, Sequence, Tuple
 
 
+@dataclass(frozen=True)
+class UpstreamServiceConfig:
+    """Describe configuration keys for an upstream service."""
+
+    prefix: str
+    default_service_name: str
+    dependency_name: str | None = None
+    payload_key: str | None = None
+
+    def __post_init__(self) -> None:
+        if self.dependency_name is None:
+            object.__setattr__(self, "dependency_name", self.default_service_name)
+        if self.payload_key is None:
+            object.__setattr__(self, "payload_key", self.prefix.lower())
+
+    @property
+    def name_key(self) -> str:
+        return f"{self.prefix}_NAME"
+
+    @property
+    def url_key(self) -> str:
+        return f"{self.prefix}_URL"
+
+    @property
+    def static_instances_key(self) -> str:
+        return f"{self.prefix}_STATIC_INSTANCES"
+
+
+USER_SERVICE_CONFIG = UpstreamServiceConfig("USER_SERVICE", "user-service")
+EVENT_SERVICE_CONFIG = UpstreamServiceConfig("EVENT_SERVICE", "event-service")
+MATCHING_SERVICE_CONFIG = UpstreamServiceConfig("MATCHING_SERVICE", "matching-service")
+
+DEFAULT_UPSTREAM_SERVICES: Tuple[UpstreamServiceConfig, ...] = (
+    USER_SERVICE_CONFIG,
+    EVENT_SERVICE_CONFIG,
+    MATCHING_SERVICE_CONFIG,
+)
+
+
+@dataclass(frozen=True)
+class ResolvedUpstreamService:
+    """Resolved runtime configuration for an upstream service."""
+
+    config: UpstreamServiceConfig
+    service_name: str
+    base_url: str
+    instances: Tuple[ServiceInstance, ...]
+
+
 @dataclass(slots=True)
 class ServiceInstance:
     """Describe a discovered service instance."""
@@ -223,25 +272,53 @@ def parse_static_instances(
     return instances
 
 
-def create_service_registry(config: Mapping[str, object]) -> ServiceRegistry:
+def resolve_upstream_services(
+    config: Mapping[str, object],
+    services: Sequence[UpstreamServiceConfig] | None = None,
+) -> Tuple[ResolvedUpstreamService, ...]:
+    """Resolve configured upstream services from the Flask configuration."""
+
+    resolved: List[ResolvedUpstreamService] = []
+    for service in services or DEFAULT_UPSTREAM_SERVICES:
+        service_name = str(
+            config.get(service.name_key, service.default_service_name)
+        ) or service.default_service_name
+        base_url = str(config.get(service.url_key, "") or "")
+        static_value = str(config.get(service.static_instances_key, "") or "")
+        instances = parse_static_instances(service_name, static_value)
+        if not instances and base_url:
+            instances.append(ServiceInstance(service_name=service_name, url=base_url))
+        resolved.append(
+            ResolvedUpstreamService(
+                config=service,
+                service_name=service_name,
+                base_url=base_url,
+                instances=tuple(instances),
+            )
+        )
+    return tuple(resolved)
+
+
+def create_service_registry(
+    config: Mapping[str, object],
+    *,
+    resolved_services: Sequence[ResolvedUpstreamService] | None = None,
+) -> ServiceRegistry:
     """Instantiate a service registry from the Flask configuration."""
 
-    service_name = str(config.get("USER_SERVICE_NAME", "user-service"))
     backend_name = str(config.get("SERVICE_DISCOVERY_BACKEND", "static")).lower()
     refresh_interval = float(config.get("SERVICE_DISCOVERY_REFRESH_INTERVAL", 30.0))
 
-    static_value = str(config.get("USER_SERVICE_STATIC_INSTANCES", ""))
-    instances = parse_static_instances(service_name, static_value)
-    if not instances:
-        url = str(config.get("USER_SERVICE_URL", ""))
-        if url:
-            instances.append(ServiceInstance(service_name=service_name, url=url))
+    resolved = tuple(resolved_services) if resolved_services is not None else resolve_upstream_services(config)
+    services: Dict[str, Sequence[ServiceInstance]] = {
+        entry.service_name: list(entry.instances) for entry in resolved
+    }
 
     backend: RegistryBackend
     if backend_name == "static":
-        backend = StaticRegistryBackend({service_name: instances})
+        backend = StaticRegistryBackend(services)
     else:  # pragma: no cover - placeholder for future providers
-        backend = StaticRegistryBackend({service_name: instances})
+        backend = StaticRegistryBackend(services)
 
     return ServiceRegistry(backend, refresh_interval=refresh_interval)
 

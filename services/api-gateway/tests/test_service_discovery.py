@@ -25,6 +25,10 @@ def _patch_proxy_session(monkeypatch, handler):
 def _reset_env(monkeypatch):
     monkeypatch.setenv("USER_SERVICE_URL", "http://upstream")
     monkeypatch.setenv("USER_SERVICE_NAME", "user-service")
+    monkeypatch.setenv("EVENT_SERVICE_URL", "http://events")
+    monkeypatch.setenv("EVENT_SERVICE_NAME", "event-service")
+    monkeypatch.setenv("MATCHING_SERVICE_URL", "http://matching")
+    monkeypatch.setenv("MATCHING_SERVICE_NAME", "matching-service")
     monkeypatch.setenv("SERVICE_DISCOVERY_BACKEND", "static")
     monkeypatch.setenv("SERVICE_DISCOVERY_REFRESH_INTERVAL", "0")
     monkeypatch.setenv("RESILIENCE_BACKOFF_FACTOR", "0")
@@ -37,6 +41,22 @@ def _reset_env(monkeypatch):
 def _make_registry(instances: List[ServiceInstance]) -> ServiceRegistry:
     backend = StaticRegistryBackend({instances[0].service_name: instances})
     return ServiceRegistry(backend, refresh_interval=0)
+
+
+def test_service_registry_includes_all_upstreams(monkeypatch):
+    monkeypatch.setenv("EVENT_SERVICE_URL", "http://events-service")
+    monkeypatch.setenv("MATCHING_SERVICE_URL", "http://matching-service")
+    app = create_app()
+    app.config["TESTING"] = True
+    registry: ServiceRegistry = app.extensions["service_registry"]
+
+    user_instances = registry.get_instances("user-service")
+    event_instances = registry.get_instances("event-service")
+    matching_instances = registry.get_instances("matching-service")
+
+    assert [inst.url for inst in user_instances] == ["http://upstream"]
+    assert [inst.url for inst in event_instances] == ["http://events-service"]
+    assert [inst.url for inst in matching_instances] == ["http://matching-service"]
 
 
 def test_round_robin_strategy_cycles_instances():

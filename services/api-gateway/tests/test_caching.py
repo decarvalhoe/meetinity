@@ -11,8 +11,12 @@ from src.app import create_app
 @pytest.fixture
 def app(monkeypatch):
     monkeypatch.setenv("USER_SERVICE_URL", "http://upstream")
+    monkeypatch.setenv("EVENT_SERVICE_URL", "http://events")
+    monkeypatch.setenv("MATCHING_SERVICE_URL", "http://matching")
     monkeypatch.setenv("JWT_SECRET", "secret")
     monkeypatch.setenv("RATE_LIMIT_AUTH", "10/minute")
+    monkeypatch.setenv("RATE_LIMIT_EVENTS", "10/minute")
+    monkeypatch.setenv("RATE_LIMIT_MATCHING", "10/minute")
     monkeypatch.setenv("RESILIENCE_BACKOFF_FACTOR", "0")
     monkeypatch.setenv("CACHE_DEFAULT_TTL", "60")
     app = create_app()
