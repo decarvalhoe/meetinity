@@ -199,5 +199,81 @@ jobs:
       - name: Render staging manifests
         run: helm template meetinity infra/helm/meetinity --values infra/helm/meetinity/values.yaml --values infra/helm/meetinity/values/staging.yaml
 
+  performance_tests:
+    name: Performance tests (k6)
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up k6
+        uses: grafana/setup-k6-action@v0.5.0
+
+      - name: Run k6 smoke test
+        run: |
+          set -euo pipefail
+          mkdir -p reports/performance
+          k6 run tests/performance/smoke.js \
+            --summary-export=reports/performance/summary.json \
+            --out json=reports/performance/results.json
+        env:
+          K6_TARGET_URL: ${{ vars.K6_TARGET_URL || 'https://test-api.k6.io/public/crocodiles/1/' }}
+
+      - name: Upload k6 report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: k6-performance-report
+          path: reports/performance
+          if-no-files-found: warn
+
+  zap_scan:
+    name: OWASP ZAP baseline scan
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Run ZAP baseline scan
+        uses: zaproxy/action-baseline@v0.9.0
+        with:
+          target: ${{ vars.ZAP_TARGET_URL || 'https://test-api.k6.io' }}
+          cmd_options: '-a -j'
+          allow_issue_warnings: true
+          fail_action: false
+
+      - name: Upload ZAP artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: zap-baseline-report
+          path: |
+            zap*
+            report_html/**
+          if-no-files-found: warn
+
+  trivy_scan:
+    name: Trivy filesystem scan
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Run Trivy vulnerability scan
+        uses: aquasecurity/trivy-action@0.21.0
+        with:
+          scan-type: fs
+          format: json
+          output: trivy-report.json
+          ignore-unfixed: true
+
+      - name: Upload Trivy report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: trivy-vulnerability-report
+          path: trivy-report.json
+          if-no-files-found: warn
+
       - name: Render prod manifests
         run: helm template meetinity infra/helm/meetinity --values infra/helm/meetinity/values.yaml --values infra/helm/meetinity/values/prod.yaml
