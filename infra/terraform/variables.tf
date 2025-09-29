@@ -183,6 +183,36 @@ variable "redis_config" {
   }
 }
 
+variable "analytics_warehouse_config" {
+  description = "Configuration for the analytics data warehouse cluster."
+  type = object({
+    enabled                    = bool
+    name                       = string
+    database_name              = string
+    master_username            = string
+    node_type                  = string
+    number_of_nodes            = number
+    port                       = number
+    snapshot_retention         = number
+    maintenance_window         = string
+    allowed_security_group_ids = list(string)
+    kms_key_id                 = optional(string)
+  })
+  default = {
+    enabled                    = true
+    name                       = "analytics-warehouse"
+    database_name              = "analytics"
+    master_username            = "analytics_admin"
+    node_type                  = "ra3.xlplus"
+    number_of_nodes            = 2
+    port                       = 5439
+    snapshot_retention         = 7
+    maintenance_window         = "sun:05:00-sun:05:30"
+    allowed_security_group_ids = []
+    kms_key_id                 = null
+  }
+}
+
 variable "waf_config" {
   description = "Configuration for the AWS WAF web ACL protecting the ingress load balancer."
   type = object({

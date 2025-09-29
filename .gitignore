@@ -1,3 +1,8 @@
 # Helm dependency archives
 infra/helm/meetinity/charts/*.tgz
 infra/helm/meetinity/charts/*/charts/*.tgz
+
+# Local analytics service artefacts
+services/analytics-service/*.db
+services/analytics-service/.pytest_cache/
+services/analytics-service/.venv/

@@ -26,6 +26,7 @@ from ..middleware.resilience import (
 )
 from ..middleware.jwt import require_jwt
 from ..services.registry import (
+    ANALYTICS_SERVICE_CONFIG,
     EVENT_SERVICE_CONFIG,
     MATCHING_SERVICE_CONFIG,
     MESSAGING_SERVICE_CONFIG,
@@ -122,6 +123,18 @@ PROXY_ROUTE_DEFINITIONS: tuple[ProxyRouteDefinition, ...] = (
         summary="Messaging proxy",
         description="Expose messaging endpoints for authenticated users.",
         tags=("Messages",),
+    ),
+    ProxyRouteDefinition(
+        name="analytics",
+        gateway_path="/api/analytics",
+        upstream_prefix="",
+        methods=("GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"),
+        upstream_service=ANALYTICS_SERVICE_CONFIG,
+        requires_jwt=True,
+        rate_limit_config="RATE_LIMIT_ANALYTICS",
+        summary="Analytics proxy",
+        description="Expose ingestion, reporting, and metadata APIs for analytics.",
+        tags=("Analytics",),
     ),
 )
 

@@ -124,6 +124,27 @@ module "redis" {
   tags                       = local.default_tags
 }
 
+module "analytics_warehouse" {
+  source = "./modules/redshift"
+
+  count                      = var.analytics_warehouse_config.enabled ? 1 : 0
+  name                       = "${var.environment}-${var.analytics_warehouse_config.name}"
+  database_name              = var.analytics_warehouse_config.database_name
+  master_username            = var.analytics_warehouse_config.master_username
+  node_type                  = var.analytics_warehouse_config.node_type
+  number_of_nodes            = var.analytics_warehouse_config.number_of_nodes
+  port                       = var.analytics_warehouse_config.port
+  snapshot_retention         = var.analytics_warehouse_config.snapshot_retention
+  maintenance_window         = var.analytics_warehouse_config.maintenance_window
+  subnet_ids                 = module.vpc.private_subnet_ids
+  vpc_security_group_ids     = distinct(concat(var.analytics_warehouse_config.allowed_security_group_ids, [
+    module.eks.node_security_group_id,
+    module.eks.cluster_security_group_id,
+  ]))
+  kms_key_id                 = try(var.analytics_warehouse_config.kms_key_id, null)
+  tags                       = local.default_tags
+}
+
 module "static_assets" {
   source = "./modules/cdn"
 

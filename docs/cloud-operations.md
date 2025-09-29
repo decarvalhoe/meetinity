@@ -64,6 +64,41 @@ Cost governance leverages AWS Budgets. When `cost_monitoring.enabled` is true, T
 - Adjust the monthly limit (`cost_monitoring.budget_limit`) in environment-specific `.tfvars` files as the footprint grows.
 - Track anomalies from Cost Explorer within the same budget view to correlate spikes with deployments.
 
+## Analytics Warehouse Operations
+
+The Terraform stack provisions an optional Amazon Redshift cluster through the
+`analytics_warehouse` module. When `analytics_warehouse_config.enabled` is set
+to `true`, the module creates a multi-node RA3 cluster inside the private
+subnets and exposes the connection metadata via the Terraform outputs
+`analytics_warehouse_endpoint`, `analytics_warehouse_port`, and
+`analytics_warehouse_database`.
+
+**Retention policy**
+
+- Automated snapshots are retained for `analytics_warehouse_config.snapshot_retention`
+  days (default: 7). Adjust this value in environment `.tfvars` to meet audit
+  requirements.
+- The analytics service keeps raw ingestion records for 90 days and persists
+  long-lived KPI snapshots inside the warehouse tables.
+
+**Backfill procedure**
+
+1. Trigger a backfill via the analytics service:
+   ```bash
+   curl -X POST "https://api.<env>.meetinity.com/api/analytics/reports/refresh" \
+     -H "Authorization: Bearer <service-token>" \
+     -H "Content-Type: application/json" \
+     -d '{"start_date": "2024-01-01T00:00:00Z", "end_date": "2024-01-31T23:59:59Z", "force_recompute": true}'
+   ```
+2. Monitor the Redshift load with CloudWatch metrics `WorkloadManagement/WLMQueueLength`
+   and the Prometheus gauge `analytics_warehouse_last_success_epoch` exposed by
+   the analytics service (`/metrics`).
+3. If a historical replay is required, restore the latest automated snapshot in
+   Redshift to a temporary cluster, export the required tables, and ingest them
+   via the `/ingest/batch` endpoint.
+4. Update the Grafana analytics dashboard to validate KPI deltas after the
+   backfill (see `infra/monitoring/grafana`).
+
 ## Runbook Updates
 
 - Re-run `infra/scripts/deploy.sh <env>` after modifying any of the above modules to ensure outputs and Kubernetes secrets stay in sync.

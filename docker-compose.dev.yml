@@ -122,6 +122,8 @@ services:
       FLASK_DEBUG: "1"
       PORT: 8080
       PYTHONUNBUFFERED: "1"
+      ANALYTICS_SERVICE_URL: http://analytics-service:8080
+      RATE_LIMIT_ANALYTICS: "10/minute"
     command: >
       sh -c "flask run --debug --host=0.0.0.0 --port 8080"
     volumes:
@@ -214,6 +216,35 @@ services:
       sh -c "alembic upgrade head && flask run --debug --host=0.0.0.0 --port 8080"
     volumes:
       - ./services/event-service:/app
+    networks:
+      - meetinity-net
+
+  analytics-service:
+    build:
+      context: ./services/analytics-service
+      dockerfile: Dockerfile
+    container_name: meetinity-analytics-service
+    restart: unless-stopped
+    env_file:
+      - .env.dev
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    ports:
+      - "${ANALYTICS_SERVICE_PORT:-8086}:8080"
+    environment:
+      FLASK_APP: src.main:create_app
+      FLASK_RUN_HOST: 0.0.0.0
+      FLASK_RUN_PORT: 8080
+      FLASK_DEBUG: "1"
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-meetinity}:${POSTGRES_PASSWORD:-meetinity}@postgres:5432/${POSTGRES_DB:-meetinity}?options=-csearch_path%3Danalytics
+      PYTHONUNBUFFERED: "1"
+    command: >
+      sh -c "flask run --debug --host=0.0.0.0 --port 8080"
+    volumes:
+      - ./services/analytics-service:/app
     networks:
       - meetinity-net
 
