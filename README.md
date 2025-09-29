@@ -81,12 +81,12 @@ make dev-down
 
 ### Technical Architecture
 
-The project uses a modern **microservices architecture**:
+The project uses a modern **microservices architecture**. All backend services now live in the [`services/`](services/) directory to streamline local development and deployments:
 
-- **API Gateway**: Flask-based request routing and authentication
-- **User Service**: OAuth authentication and profile management
-- **Event Service**: Event creation, discovery, and registration
-- **Matching Service**: Professional matching algorithms and swipe functionality
+- **API Gateway** (`services/api-gateway`): Flask-based request routing and authentication
+- **User Service** (`services/user-service`): OAuth authentication and profile management
+- **Event Service** (`services/event-service`): Event creation, discovery, and registration
+- **Matching Service** (`services/matching-service`): Professional matching algorithms and swipe functionality
 - **Mobile App**: React 18 with TypeScript and Vite
 - **Admin Portal**: React-based administration interface
 - **Database**: PostgreSQL for data persistence
@@ -94,22 +94,26 @@ The project uses a modern **microservices architecture**:
 
 ### Cloud Infrastructure Enhancements
 
+Our infrastructure baseline is now fully documented and automated:
+
 - **Static assets CDN**: Private S3 bucket fronted by CloudFront with optional custom domains.
 - **Shared load balancers**: Pre-provisioned ALB (HTTP/HTTPS) and NLB (TCP) endpoints for workloads that cannot rely on the ingress controller.
 - **Automated backups**: Daily AWS Backup plan covering the Aurora PostgreSQL cluster with configurable retention.
 - **Cost monitoring**: Monthly AWS Budget notifications to alert the platform team and finance stakeholders.
+- **Infrastructure as Code**: Terraform modules, Helm charts, and deployment scripts described in [`docs/cloud-operations.md`](docs/cloud-operations.md), [`docs/containerization-roadmap.md`](docs/containerization-roadmap.md), [`docs/observability.md`](docs/observability.md), and [`docs/autoscaling-playbook.md`](docs/autoscaling-playbook.md).
 
-### Repository Structure
+### Repository Structure & Progress
 
-| Repository | Description | Status |
+| Component | Location | Status |
 |---|---|---|
-| **meetinity** | Main repository with API contracts and documentation | 15% - Specifications defined |
-| **meetinity-mobile-app** | React mobile application for end users | 70% - Functional with OAuth |
-| **meetinity-admin-portal** | React administration interface | 60% - User management complete |
-| **meetinity-api-gateway** | Flask API gateway for request routing | 40% - Basic routing implemented |
-| **meetinity-user-service** | Flask user management and authentication | 80% - Complete OAuth and profiles |
-| **meetinity-matching-service** | Flask matching algorithms and swipe logic | 25% - Basic algorithms implemented |
-| **meetinity-event-service** | Flask event management system | 35% - REST API with validation |
+| **Documentation & Contracts** | `docs/`, `contracts/` | 25% – Core specifications consolidated, awaiting final data models |
+| **API Gateway** | `services/api-gateway` | 45% – Auth pass-through and routing ready, needs coverage for event/messaging flows |
+| **User Service** | `services/user-service` | 80% – OAuth + profiles stable, pending messaging profile hooks |
+| **Event Service** | `services/event-service` | 40% – REST API scaffolding complete, registration storage outstanding |
+| **Matching Service** | `services/matching-service` | 30% – Matching logic prototype, requires data sync with events/users |
+| **Messaging (planned)** | `services/` (new) | 10% – Container baseline prepared, functionality to be implemented |
+| **Mobile App** | External repo `meetinity-mobile-app` | 70% – Authentication and discovery UI shipped |
+| **Admin Portal** | External repo `meetinity-admin-portal` | 60% – User management complete |
 
 ## 🤝 How to Contribute?
 
@@ -132,10 +136,10 @@ We welcome all contributions! Whether you are:
 A comprehensive technical evaluation was conducted in September 2025, revealing strong foundations with strategic opportunities for growth.
 
 - **Key Strengths**: Robust OAuth authentication, modern React frontends, clean microservices architecture
-- **Critical Issues**: Database integration problems in user-service, incomplete CI/CD infrastructure
-- **Priority Actions**: Resolve database issues, complete event and matching services, implement networking features
+- **Critical Issues**: Event registrations, cross-service data synchronisation, and messaging flows still pending
+- **Priority Actions**: Expand gateway coverage, deliver registrations & matching data sync, implement networking features
 
-Find the detailed evaluation and strategic roadmap in [`docs/project-evaluation.md`](docs/project-evaluation.md) and [`TODO.md`](TODO.md).
+Find the detailed evaluation and strategic roadmap in [`docs/project-evaluation.md`](docs/project-evaluation.md), [`docs/cloud-operations.md`](docs/cloud-operations.md), and [`TODO.md`](TODO.md).
 
 ## 📞 Support and Community
 

@@ -1,35 +1,33 @@
-# Évaluation du Projet Meetinity
+# Évaluation du Projet Meetinity – Septembre 2025
 
 ## 1. Vue d'ensemble
 
-Ce repository sert de point d'entrée principal pour le projet Meetinity. Il contient la documentation de l'architecture, les spécifications OpenAPI, et les workflows d'intégration et de déploiement continus (CI/CD).
+Le repository principal consolide désormais la documentation fonctionnelle, les contrats d'API et l'infrastructure commune aux microservices. Les travaux livrés au cours du dernier trimestre ont permis d'industrialiser l'intégration continue, d'automatiser le provisionnement cloud et de standardiser la containerisation de l'ensemble des services.
 
-## 2. État Actuel
+## 2. Réalisations Clés
 
-Le repository est bien structuré et fournit une base solide pour le développement de la plateforme. Les workflows CI/CD sont définis, mais nécessitent une configuration complète pour être opérationnels. Les contrats d'API (OpenAPI) sont également présents, ce qui est essentiel pour la communication entre les microservices.
+- **CI/CD opérationnel** : Les workflows GitHub Actions exécutent les tests, publient les images conteneurisées et orchestrent les promotions vers les environnements de staging et de production.
+- **Infrastructure as Code** : Les modules Terraform, les chartes Helm et les manifestes Kubernetes décrits dans le dossier `infra/` forment une base reproductible couvrant réseau, sécurité, base de données Aurora et observabilité.
+- **Standardisation de la containerisation** : Les images Docker pour les services backend et les frontends suivent une même convention de build, documentée dans [`docs/containerization-roadmap.md`](containerization-roadmap.md) et [`docs/cloud-operations.md`](cloud-operations.md).
 
-### Points Forts
+Ces livrables rendent l'infrastructure testable et déployable de bout en bout, réduisant drastiquement le travail manuel pour chaque nouvelle fonctionnalité.
 
-- **Architecture Microservices :** L'architecture est clairement définie et modulaire.
-- **Contrats d'API :** La présence de spécifications OpenAPI facilite le développement et l'intégration des services.
-- **Automatisation :** Les bases pour l'automatisation CI/CD sont en place.
+## 3. Lacunes Fonctionnelles
 
-### Points à Améliorer
+Malgré ces avancées, plusieurs fonctionnalités essentielles à la valeur utilisateur restent incomplètes :
 
-- **Infrastructure de Déploiement :** L'infrastructure de déploiement n'est pas encore complètement définie ni mise en œuvre.
-- **Documentation d'Architecture :** La documentation d'architecture pourrait être plus détaillée pour inclure des diagrammes et des descriptions plus approfondies des interactions entre les services.
+- **Couverture de l'API Gateway** : La passerelle gère l'authentification mais n'expose pas encore l'ensemble des flux événements, matching et messagerie.
+- **Inscriptions aux événements** : Le `event-service` ne persiste pas les inscriptions et n'émet pas les notifications nécessaires.
+- **Synchronisation des données de matching** : Le `matching-service` fonctionne avec des données fictives et n'est pas raccordé aux profils ni aux disponibilités d'événements.
+- **Messagerie temps réel** : Aucun service de conversation n'est encore prêt, et les applications clientes n'ont pas de canal de communication actif.
 
-## 3. Issues Ouvertes
+Ces éléments constituent le cœur de l'expérience Meetinity et expliquent la progression limitée sur les indicateurs métiers.
 
-Les issues ouvertes dans ce repository sont de nature stratégique et architecturale :
+## 4. Recommandations Prioritaires
 
-- **[STRATEGY] Data Architecture and Integration Strategy (#3) :** Définir une stratégie claire pour l'architecture des données et l'intégration entre les services.
-- **[ARCHITECTURE] New Microservices Implementation (#2) :** Planifier l'implémentation de nouveaux microservices.
-- **[INFRASTRUCTURE] Complete DevOps and Deployment Infrastructure (#1) :** Finaliser l'infrastructure DevOps et de déploiement.
+1. **Étendre la Gateway** pour couvrir les flux d'événements, de matching et de messagerie, avec journalisation et observabilité alignées sur les normes définies.
+2. **Finaliser les inscriptions** en connectant le `event-service` à PostgreSQL, en implémentant la logique de places disponibles et en publiant des événements de domaine.
+3. **Boucler la synchronisation Matching** en orchestrant les échanges entre `user-service`, `event-service` et `matching-service`, avec des jobs de mise à jour et une file d'attente évènementielle.
+4. **Livrer la Messagerie MVP** en choisissant la pile (ex. WebSocket + Redis streams), en exposant les endpoints REST/WebSocket, puis en intégrant le mobile et l'admin.
 
-## 4. Recommandations
-
-- **Prioriser l'Infrastructure :** Il est crucial de finaliser l'infrastructure de déploiement pour permettre des tests et des déploiements automatisés.
-- **Détailler l'Architecture des Données :** Une documentation détaillée de l'architecture des données est nécessaire pour assurer la cohérence et l'intégrité des données à travers la plateforme.
-- **Décomposer les Épiques :** Les issues de type "EPIC" devraient être décomposées en tâches plus petites et plus faciles à gérer pour une meilleure planification et un meilleur suivi.
-
+La base d'infrastructure permet désormais de se concentrer exclusivement sur ces blocs fonctionnels pour atteindre un MVP cohérent.
