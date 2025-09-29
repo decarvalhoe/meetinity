@@ -13,7 +13,7 @@ else
 fi
 
 # Exécute les migrations des services dépendants pour garantir que les tables existent.
-for service in user-service event-service; do
+for service in user-service event-service matching-service; do
   echo "[seed] Application des migrations pour ${service}"
   "${COMPOSE_CMD[@]}" exec "${service}" alembic upgrade head >/dev/null
 done

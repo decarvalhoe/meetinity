@@ -1,5 +1,7 @@
 """Integration tests validating transactional behaviour."""
 
+from sqlalchemy import text
+
 import pytest
 
 from src.storage import count_rows, create_user
@@ -10,7 +12,7 @@ from src.storage.models import User
 def test_transaction_scope_rolls_back_on_error():
     """Ensure the transactional context rolls back on raised exceptions."""
 
-    create_user(
+    user_one = create_user(
         User(
             id=None,
             email="rollback1@example.com",
@@ -18,7 +20,7 @@ def test_transaction_scope_rolls_back_on_error():
             preferences=["ai"],
         )
     )
-    create_user(
+    user_two = create_user(
         User(
             id=None,
             email="rollback2@example.com",
@@ -28,10 +30,15 @@ def test_transaction_scope_rolls_back_on_error():
     )
 
     with pytest.raises(RuntimeError):
-        with transaction_scope() as cursor:
-            cursor.execute(
-                "INSERT INTO swipes (user_id, target_id, action, created_at) VALUES (?, ?, 'like', datetime('now'))",
-                (1, 2),
+        with transaction_scope() as session:
+            session.execute(
+                text(
+                    """
+                    INSERT INTO swipes (user_id, target_id, action, created_at)
+                    VALUES (:user_id, :target_id, 'like', timezone('UTC', now()))
+                    """
+                ),
+                {"user_id": user_one.id, "target_id": user_two.id},
             )
             raise RuntimeError("force rollback")
 

@@ -8,7 +8,9 @@ from __future__ import annotations
 
 import math
 import re
+import os
 from collections.abc import Iterable, Mapping
+from datetime import UTC, datetime
 from typing import Any, Dict, List, Tuple
 
 from flask import Flask, jsonify, request
@@ -27,12 +29,14 @@ from src.storage import (
     init_db,
     list_users,
     log_swipe_event,
+    upsert_user,
 )
 from src.storage.models import Swipe, SwipeEvent, User
 
 app = Flask(__name__)
 CORS(app, resources={r"/*": {"origins": "*"}})
-init_db()
+if os.getenv("MATCHING_SKIP_DB_INIT") != "1":
+    init_db()
 
 CRITERION_LABELS = {
     "industry": "Industrie",
@@ -44,6 +48,80 @@ CRITERION_LABELS = {
 }
 
 PREFERENCE_WEIGHT = 0.4
+
+
+def _parse_datetime(value: Any) -> datetime | None:
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        return value if value.tzinfo else value.replace(tzinfo=UTC)
+    if isinstance(value, str) and value.strip():
+        text = value.strip()
+        if text.endswith("Z"):
+            text = text[:-1] + "+00:00"
+        try:
+            parsed = datetime.fromisoformat(text)
+        except ValueError as exc:
+            raise ValueError(f"Timestamp '{value}' n'est pas au format ISO valide.") from exc
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=UTC)
+        return parsed
+    raise ValueError("La valeur de date doit être une chaîne ISO ou un objet datetime.")
+
+
+def _normalize_preferences(raw: Any) -> List[Any]:
+    if raw is None:
+        return []
+    if isinstance(raw, list):
+        return list(raw)
+    if isinstance(raw, dict):
+        normalized: List[Any] = []
+        for key, value in raw.items():
+            normalized.append({"type": key, "value": value})
+        return normalized
+    return [raw]
+
+
+def _user_from_payload(payload: Mapping[str, Any]) -> User:
+    email = payload.get("email")
+    if not isinstance(email, str) or not email.strip():
+        raise ValueError("Le champ 'email' est requis.")
+    full_name = payload.get("full_name") or payload.get("name")
+    if not isinstance(full_name, str) or not full_name.strip():
+        raise ValueError("Le champ 'full_name' est requis.")
+
+    created_at = payload.get("created_at")
+    updated_at = payload.get("updated_at")
+
+    raw_id = payload.get("id")
+    user_id: int | None
+    if raw_id is None:
+        user_id = None
+    elif isinstance(raw_id, int) and not isinstance(raw_id, bool):
+        user_id = raw_id
+    else:
+        try:
+            user_id = int(raw_id)
+        except (TypeError, ValueError) as exc:
+            raise ValueError("Le champ 'id' doit être un entier valide.") from exc
+
+    user = User(
+        id=user_id,
+        email=email.strip(),
+        full_name=full_name.strip(),
+        title=payload.get("title") or payload.get("job_title"),
+        company=payload.get("company"),
+        bio=payload.get("bio") or payload.get("about"),
+        preferences=_normalize_preferences(payload.get("preferences")),
+        is_active=bool(payload.get("is_active", True)),
+    )
+
+    if created_at is not None:
+        user.created_at = _parse_datetime(created_at)
+    if updated_at is not None:
+        user.updated_at = _parse_datetime(updated_at)
+
+    return user
 
 
 def _preferences_set(user: User) -> set[str]:
@@ -288,6 +366,108 @@ def health():
         Response: JSON response with service status.
     """
     return jsonify({"status": "ok", "service": "matching-service"})
+
+
+@app.route("/internal/users", methods=["POST"])
+def ingest_users():
+    """Ingest or update user profiles coming from the user service."""
+
+    if not request.is_json:
+        return (
+            jsonify(
+                {
+                    "error": "Invalid request",
+                    "details": "Content type must be application/json.",
+                }
+            ),
+            400,
+        )
+
+    payload = request.get_json(silent=True)
+    if payload is None:
+        return (
+            jsonify(
+                {
+                    "error": "Invalid request",
+                    "details": "Malformed JSON payload.",
+                }
+            ),
+            400,
+        )
+
+    records: List[Mapping[str, Any]]
+    if isinstance(payload, Mapping) and "users" in payload:
+        raw_records = payload["users"]
+        if not isinstance(raw_records, list):
+            return (
+                jsonify(
+                    {
+                        "error": "Invalid request",
+                        "details": "Le champ 'users' doit être une liste d'objets.",
+                    }
+                ),
+                400,
+            )
+        records = []
+        for entry in raw_records:
+            if not isinstance(entry, Mapping):
+                return (
+                    jsonify(
+                        {
+                            "error": "Invalid request",
+                            "details": "Chaque utilisateur doit être un objet JSON.",
+                        }
+                    ),
+                    400,
+                )
+            records.append(entry)
+    elif isinstance(payload, list):
+        records = []
+        for entry in payload:
+            if not isinstance(entry, Mapping):
+                return (
+                    jsonify(
+                        {
+                            "error": "Invalid request",
+                            "details": "Chaque utilisateur doit être un objet JSON.",
+                        }
+                    ),
+                    400,
+                )
+            records.append(entry)
+    elif isinstance(payload, Mapping):
+        records = [payload]
+    else:
+        return (
+            jsonify(
+                {
+                    "error": "Invalid request",
+                    "details": "Format de payload non supporté pour l'ingestion.",
+                }
+            ),
+            400,
+        )
+
+    ingested_ids: List[int] = []
+    errors: List[Dict[str, Any]] = []
+
+    for index, record in enumerate(records):
+        try:
+            user = _user_from_payload(record)
+        except ValueError as exc:
+            errors.append({"index": index, "error": str(exc)})
+            continue
+        stored = upsert_user(user)
+        if stored.id is not None:
+            ingested_ids.append(stored.id)
+
+    if errors:
+        return (
+            jsonify({"error": "Invalid payload", "details": errors}),
+            400,
+        )
+
+    return jsonify({"ingested": len(ingested_ids), "user_ids": ingested_ids})
 
 
 @app.route("/matches/<int:user_id>")
