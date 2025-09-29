@@ -13,6 +13,7 @@ from src.services.events import (
     TagService,
     TemplateService,
 )
+from src.services.registrations import RegistrationService
 from src.services.feedback import FeedbackService
 from src.services.networking import NetworkingService
 from src.services.participants import SpeakerService, SponsorService
@@ -31,6 +32,7 @@ SERVICE_FACTORIES: Dict[str, Callable[[Any], Any]] = {
     "feedback_service": FeedbackService,
     "speaker_service": SpeakerService,
     "sponsor_service": SponsorService,
+    "registration_service": RegistrationService,
 }
 
 EXTRA_SERVICE_KEYS = {"search_service", "recommendation_service"}
@@ -76,6 +78,10 @@ def get_speaker_service() -> SpeakerService:
 
 def get_sponsor_service() -> SponsorService:
     return _get_service("sponsor_service", SponsorService)
+
+
+def get_registration_service() -> RegistrationService:
+    return _get_service("registration_service", RegistrationService)
 
 
 def get_search_service() -> EventSearchService:

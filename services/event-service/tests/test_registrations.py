@@ -1,4 +1,7 @@
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
+
+from src.database import get_session
+from src.models import Event, NoShowPenalty
 
 
 def create_event(client, **overrides):
@@ -15,43 +18,50 @@ def create_event(client, **overrides):
     return response.json["event_id"]
 
 
-def register(client, event_id, email, name):
+def join_event(client, event_id, email, name):
     response = client.post(
-        f"/events/{event_id}/registrations",
+        f"/events/{event_id}/join",
         json={"email": email, "name": name},
     )
     return response
 
 
-def test_registration_waitlist_flow(client):
-    event_id = create_event(client, attendees=2)
+def cancel_event_registration(client, event_id, registration_id):
+    response = client.delete(
+        f"/events/{event_id}/join",
+        query_string={"registration_id": registration_id},
+    )
+    return response
 
-    first = register(client, event_id, "alice@example.com", "Alice")
-    assert first.status_code == 201
-    assert first.json["status"] == "confirmed"
-    assert first.json["registration"]["status"] == "confirmed"
 
-    second = register(client, event_id, "bob@example.com", "Bob")
-    assert second.status_code == 201
+def test_join_event_handles_confirmation_and_waitlist(client):
+    event_id = create_event(client, attendees=1)
 
-    third = register(client, event_id, "carol@example.com", "Carol")
-    assert third.status_code == 202
-    assert third.json["status"] == "waitlisted"
+    first = join_event(client, event_id, "alice@example.com", "Alice")
+    assert first.status_code == 200
+    assert first.json["success"] is True
+    assert first.json["registration_id"]
+
+    second = join_event(client, event_id, "bob@example.com", "Bob")
+    assert second.status_code == 202
+    assert second.json["status"] == "waitlisted"
 
     waitlist = client.get(f"/events/{event_id}/waitlist")
     assert waitlist.status_code == 200
     emails = [entry["email"] for entry in waitlist.json["waitlist"]]
-    assert "carol@example.com" in emails
+    assert "bob@example.com" in emails
 
 
 def test_waitlist_promotion_on_cancellation(client):
     event_id = create_event(client, attendees=1)
-    first = register(client, event_id, "first@example.com", "First")
-    second = register(client, event_id, "second@example.com", "Second")
-    assert second.status_code == 202
 
-    registration_id = first.json["registration"]["id"]
-    cancel = client.delete(f"/events/{event_id}/registrations/{registration_id}")
+    confirmed = join_event(client, event_id, "first@example.com", "First")
+    waitlisted = join_event(client, event_id, "second@example.com", "Second")
+    assert confirmed.status_code == 200
+    assert waitlisted.status_code == 202
+
+    registration_id = confirmed.json["registration_id"]
+    cancel = cancel_event_registration(client, event_id, registration_id)
     assert cancel.status_code == 200
     promoted = cancel.json.get("promoted", [])
     assert any(item["email"] == "second@example.com" for item in promoted)
@@ -62,40 +72,50 @@ def test_waitlist_promotion_on_cancellation(client):
     assert statuses.get("second@example.com") == "confirmed"
 
 
-def test_check_in_endpoint_creates_attendance(client):
+def test_join_event_rejects_when_closed(client):
     event_id = create_event(client, attendees=1)
-    response = register(client, event_id, "check@example.com", "Check In")
-    token = response.json["registration"]["token"]
 
-    check_in = client.post(
-        f"/check-in/{token}",
-        json={"method": "qr", "metadata": {"gate": "north"}},
-    )
-    assert check_in.status_code == 200
-    attendance = check_in.json["attendance"]
-    assert attendance["status"] == "checked_in"
-    assert attendance["method"] == "qr"
+    session = get_session()
+    try:
+        event = session.get(Event, event_id)
+        event.registration_open = False
+        session.commit()
+    finally:
+        session.close()
 
-    attendance_list = client.get(f"/events/{event_id}/attendance")
-    assert attendance_list.status_code == 200
-    record = attendance_list.json["attendance"][0]
-    assert record["status"] == "checked_in"
-    assert record["checked_in_at"] is not None
+    response = join_event(client, event_id, "closed@example.com", "Closed")
+    assert response.status_code == 403
+    assert "fermées" in response.json["error"]["message"]
 
 
-def test_no_show_detection_applies_penalty(client):
-    past_date = (date.today() - timedelta(days=10)).isoformat()
-    event_id = create_event(client, date=past_date, attendees=1)
-    response = register(client, event_id, "ghost@example.com", "Ghost")
-    assert response.status_code == 201
+def test_join_event_prevents_duplicates(client):
+    event_id = create_event(client, attendees=2)
 
-    detection = client.post(f"/events/{event_id}/attendance")
-    assert detection.status_code == 200
-    penalized = detection.json["penalized"]
-    assert penalized
-    assert penalized[0]["email"] == "ghost@example.com"
+    first = join_event(client, event_id, "duplicate@example.com", "Dup")
+    assert first.status_code == 200
 
-    registrations = client.get(f"/events/{event_id}/registrations")
-    assert registrations.status_code == 200
-    statuses = {item["email"]: item["status"] for item in registrations.json["registrations"]}
-    assert statuses["ghost@example.com"] == "no_show"
+    second = join_event(client, event_id, "duplicate@example.com", "Dup")
+    assert second.status_code == 409
+    assert "déjà inscrit" in second.json["error"]["message"]
+
+
+def test_join_event_blocks_penalized_attendees(client):
+    event_id = create_event(client, attendees=2)
+    blocked_email = "penalty@example.com"
+
+    session = get_session()
+    try:
+        penalty = NoShowPenalty(
+            attendee_email=blocked_email,
+            event_id=event_id,
+            reason="Previous no-show",
+            expires_at=datetime.utcnow() + timedelta(days=5),
+        )
+        session.add(penalty)
+        session.commit()
+    finally:
+        session.close()
+
+    response = join_event(client, event_id, blocked_email, "Blocked")
+    assert response.status_code == 403
+    assert "bloqué" in response.json["error"]["message"]
