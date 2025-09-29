@@ -1,0 +1,15 @@
+{
+  "type": "record",
+  "name": "MergeDecisionValue",
+  "namespace": "com.meetinity.masterdata",
+  "doc": "Decision event indicating how potential duplicates were resolved.",
+  "fields": [
+    { "name": "canonical_user_id", "type": {"type": "string", "logicalType": "uuid"} },
+    { "name": "duplicate_user_id", "type": ["null", {"type": "string", "logicalType": "uuid"}], "default": null, "doc": "If merged, this ID was merged into canonical_user_id." },
+    { "name": "decision", "type": {"type": "enum", "name": "MergeDecisionType", "symbols": ["auto_merged", "manual_merged", "dismissed", "escalated"]} },
+    { "name": "reason", "type": ["null", "string"], "default": null },
+    { "name": "reviewer", "type": ["null", "string"], "default": null, "doc": "User or system that issued the decision." },
+    { "name": "match_score", "type": ["null", "float"], "default": null },
+    { "name": "decided_at", "type": {"type": "long", "logicalType": "timestamp-micros"} }
+  ]
+}

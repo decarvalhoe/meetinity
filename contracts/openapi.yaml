@@ -654,6 +654,62 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
+  /internal/master-data/canonical-users/{canonicalUserId}:
+    get:
+      summary: Récupérer un utilisateur canonique
+      description: Fournit la représentation canonique d'un utilisateur, y compris les métadonnées de lignage et la version du profil.
+      tags: [Master Data]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: canonicalUserId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Utilisateur canonique trouvé
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CanonicalUserResponse'
+        '404':
+          description: Aucun utilisateur canonique pour cet identifiant.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /internal/master-data/canonical-users/{canonicalUserId}/profile:
+    get:
+      summary: Récupérer le profil canonique
+      description: Retourne les attributs normalisés du profil et les entrées de lignage qui les ont alimentés.
+      tags: [Master Data]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: canonicalUserId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Profil canonique trouvé
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CanonicalProfileResponse'
+        '404':
+          description: Aucun profil canonique disponible pour cet utilisateur.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
 components:
   securitySchemes:
     bearerAuth:
@@ -704,6 +760,81 @@ components:
         availability:
           type: string
           description: Statut de disponibilité de l'utilisateur (ex. ouvert aux opportunités).
+
+    CanonicalLineageEntry:
+      type: object
+      properties:
+        attribute_path:
+          type: string
+        source_system:
+          type: string
+        source_record_id:
+          type: string
+        confidence:
+          type: number
+          format: float
+        valid_from:
+          type: string
+          format: date-time
+      required: [attribute_path, source_system, source_record_id, confidence, valid_from]
+
+    CanonicalUserResponse:
+      type: object
+      properties:
+        canonical_user_id:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [active, inactive, merged, deleted]
+        legacy_ids:
+          type: object
+          additionalProperties:
+            type: string
+        primary_profile_version:
+          type: integer
+        lineage_snapshot:
+          type: array
+          items:
+            $ref: '#/components/schemas/CanonicalLineageEntry'
+        updated_at:
+          type: string
+          format: date-time
+      required: [canonical_user_id, status, legacy_ids, primary_profile_version, updated_at]
+
+    CanonicalProfileResponse:
+      type: object
+      properties:
+        canonical_user_id:
+          type: string
+          format: uuid
+        version:
+          type: integer
+        full_name:
+          type: string
+          nullable: true
+        email:
+          type: string
+          format: email
+          nullable: true
+        phone_e164:
+          type: string
+          nullable: true
+        country_code:
+          type: string
+          nullable: true
+        preferences:
+          type: object
+          additionalProperties:
+            type: string
+        lineage:
+          type: array
+          items:
+            $ref: '#/components/schemas/CanonicalLineageEntry'
+        updated_at:
+          type: string
+          format: date-time
+      required: [canonical_user_id, version, preferences, lineage, updated_at]
 
     Event:
       type: object
