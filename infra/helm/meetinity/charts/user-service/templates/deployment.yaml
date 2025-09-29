@@ -23,9 +23,20 @@ spec:
             - name: http
               containerPort: {{ .Values.service.port }}
               protocol: TCP
-          {{- if .Values.env }}
+          {{- $env := list }}
+          {{- range $index, $item := (.Values.env | default list) }}
+          {{- $env = append $env $item }}
+          {{- end }}
+          {{- $dbConfig := default (dict) (get .Values.global "database") }}
+          {{- $dbSecretName := default "" (get $dbConfig "secretName") }}
+          {{- $dbSecretKeys := default (dict) (get $dbConfig "secretKeys") }}
+          {{- $dbUrlKey := default "" (get $dbSecretKeys "url") }}
+          {{- if and $dbSecretName $dbUrlKey }}
+          {{- $env = append $env (dict "name" "DATABASE_URL" "valueFrom" (dict "secretKeyRef" (dict "name" $dbSecretName "key" $dbUrlKey))) }}
+          {{- end }}
+          {{- if gt (len $env) 0 }}
           env:
-            {{- toYaml .Values.env | nindent 12 }}
+            {{- toYaml $env | nindent 12 }}
           {{- end }}
           resources:
             {{- toYaml .Values.resources | nindent 12 }}

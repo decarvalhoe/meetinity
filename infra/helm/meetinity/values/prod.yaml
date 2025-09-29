@@ -17,16 +17,6 @@ shared:
       encryptedData:
         tls.crt: PLACEHOLDER_PROD_CERT
         tls.key: PLACEHOLDER_PROD_KEY
-  vaultSecrets:
-    - name: platform-database
-      path: kv/data/prod/platform/database
-      secretStoreRef:
-        name: vault-prod
-      target:
-        template:
-          type: Opaque
-          data:
-            DATABASE_URL: '{{ .data.database_url }}'
 
 api-gateway:
   environment: prod
@@ -79,18 +69,9 @@ api-gateway:
           maxAllowed:
             cpu: 3000m
             memory: 4Gi
-  vaultSecrets:
-    - name: api-gateway-env
-      path: kv/data/prod/api-gateway/app
-      secretStoreRef:
-        name: vault-prod
-      target:
-        template:
-          type: Opaque
-          data:
-            DATABASE_URL: '{{ .data.database_url }}'
-            REDIS_URL: '{{ .data.redis_url }}'
-            LOG_LEVEL: '{{ .data.log_level | default "warn" }}'
+  env:
+    - name: LOG_LEVEL
+      value: warn
 
 user-service:
   environment: prod
@@ -141,16 +122,6 @@ user-service:
           maxAllowed:
             cpu: 2000m
             memory: 3Gi
-  vaultSecrets:
-    - name: user-service-db
-      path: kv/data/prod/user-service/database
-      secretStoreRef:
-        name: vault-prod
-      target:
-        template:
-          type: Opaque
-          data:
-            url: '{{ .data.url }}'
 
 matching-service:
   environment: prod

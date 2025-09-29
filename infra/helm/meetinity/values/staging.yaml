@@ -71,17 +71,9 @@ api-gateway:
           maxAllowed:
             cpu: 2
             memory: 2Gi
-  vaultSecrets:
-    - name: api-gateway-env
-      path: kv/data/staging/api-gateway/app
-      secretStoreRef:
-        name: vault-staging
-      target:
-        template:
-          type: Opaque
-          data:
-            DATABASE_URL: '{{ .data.database_url }}'
-            REDIS_URL: '{{ .data.redis_url }}'
+  env:
+    - name: LOG_LEVEL
+      value: info
 
 user-service:
   environment: staging
@@ -132,16 +124,6 @@ user-service:
           maxAllowed:
             cpu: 1500m
             memory: 2Gi
-  vaultSecrets:
-    - name: user-service-db
-      path: kv/data/staging/user-service/database
-      secretStoreRef:
-        name: vault-staging
-      target:
-        template:
-          type: Opaque
-          data:
-            url: '{{ .data.url }}'
 
 matching-service:
   environment: staging

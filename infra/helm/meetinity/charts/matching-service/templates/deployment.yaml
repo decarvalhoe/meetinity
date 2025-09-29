@@ -23,9 +23,20 @@ spec:
             - name: http
               containerPort: {{ .Values.service.port }}
               protocol: TCP
-          {{- if .Values.env }}
+          {{- $env := list }}
+          {{- range $index, $item := (.Values.env | default list) }}
+          {{- $env = append $env $item }}
+          {{- end }}
+          {{- $redisConfig := default (dict) (get .Values.global "redis") }}
+          {{- $redisSecretName := default "" (get $redisConfig "secretName") }}
+          {{- $redisSecretKeys := default (dict) (get $redisConfig "secretKeys") }}
+          {{- $redisUrlKey := default "" (get $redisSecretKeys "url") }}
+          {{- if and $redisSecretName $redisUrlKey }}
+          {{- $env = append $env (dict "name" "REDIS_URL" "valueFrom" (dict "secretKeyRef" (dict "name" $redisSecretName "key" $redisUrlKey))) }}
+          {{- end }}
+          {{- if gt (len $env) 0 }}
           env:
-            {{- toYaml .Values.env | nindent 12 }}
+            {{- toYaml $env | nindent 12 }}
           {{- end }}
           resources:
             {{- toYaml .Values.resources | nindent 12 }}

@@ -86,11 +86,6 @@ vpa:
 env:
   - name: FLASK_ENV
     value: production
-  - name: DATABASE_URL
-    valueFrom:
-      secretKeyRef:
-        name: user-service-db
-        key: url
 
 configMaps: []
 sealedSecrets: []

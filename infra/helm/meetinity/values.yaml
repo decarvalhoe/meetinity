@@ -5,6 +5,27 @@ global:
     default:
       name: meetinity-vault
       kind: ClusterSecretStore
+  database:
+    secretName: ""
+    secretKeys:
+      host: host
+      readerHost: reader_host
+      port: port
+      name: database
+      username: username
+      password: password
+      url: url
+      readerUrl: reader_url
+  redis:
+    secretName: ""
+    secretKeys:
+      host: host
+      readerHost: reader_host
+      port: port
+      username: username
+      password: password
+      url: url
+      readerUrl: reader_url
 
 shared:
   configMaps:
