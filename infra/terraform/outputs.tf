@@ -89,3 +89,38 @@ output "redis_auth_token" {
   value       = module.redis.auth_token
   sensitive   = true
 }
+
+output "static_assets_bucket_name" {
+  description = "Name of the S3 bucket hosting static assets."
+  value       = module.static_assets.bucket_name
+}
+
+output "static_assets_cdn_domain" {
+  description = "Domain name of the CloudFront distribution serving static assets."
+  value       = module.static_assets.distribution_domain_name
+}
+
+output "static_assets_distribution_id" {
+  description = "Identifier of the CloudFront distribution serving static assets."
+  value       = module.static_assets.distribution_id
+}
+
+output "shared_alb_dns_name" {
+  description = "DNS name of the shared Application Load Balancer."
+  value       = module.load_balancers.alb_dns_name
+}
+
+output "shared_nlb_dns_name" {
+  description = "DNS name of the shared Network Load Balancer."
+  value       = module.load_balancers.nlb_dns_name
+}
+
+output "aws_backup_vault_arn" {
+  description = "ARN of the AWS Backup vault protecting stateful services."
+  value       = module.backup.vault_arn
+}
+
+output "cost_budget_arn" {
+  description = "ARN of the AWS Budgets resource tracking monthly spend."
+  value       = module.cost_monitoring.budget_arn
+}

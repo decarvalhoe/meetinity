@@ -124,6 +124,67 @@ module "redis" {
   tags                       = local.default_tags
 }
 
+module "static_assets" {
+  source = "./modules/cdn"
+
+  enabled                 = try(var.static_assets.enabled, false)
+  environment             = var.environment
+  bucket_name             = try(var.static_assets.bucket_name, null)
+  domain_names            = try(var.static_assets.domain_names, [])
+  price_class             = try(var.static_assets.price_class, "PriceClass_100")
+  default_ttl             = try(var.static_assets.default_ttl_seconds, 3600)
+  max_ttl                 = try(var.static_assets.max_ttl_seconds, 86400)
+  min_ttl                 = try(var.static_assets.min_ttl_seconds, 0)
+  compress_objects        = try(var.static_assets.compress, true)
+  acm_certificate_arn     = try(var.static_assets.acm_certificate_arn, null)
+  logging_bucket          = try(var.static_assets.logging_bucket, null)
+  minimum_protocol_version = try(var.static_assets.minimum_protocol, "TLSv1.2_2021")
+  tags                    = local.default_tags
+}
+
+module "load_balancers" {
+  source = "./modules/load_balancers"
+
+  vpc_id             = module.vpc.vpc_id
+  public_subnet_ids  = module.vpc.public_subnet_ids
+  private_subnet_ids = module.vpc.private_subnet_ids
+  environment        = var.environment
+  alb_config         = var.alb_config
+  nlb_config         = var.nlb_config
+  tags               = local.default_tags
+}
+
+module "backup" {
+  source = "./modules/backup"
+
+  enabled            = try(var.backup_config.enabled, false)
+  environment        = var.environment
+  vault_name         = try(var.backup_config.vault_name, null)
+  plan_name          = try(var.backup_config.plan_name, null)
+  schedule_expression = try(var.backup_config.schedule_expression, "cron(0 3 * * ? *)")
+  start_window        = try(var.backup_config.start_window_minutes, 60)
+  completion_window   = try(var.backup_config.completion_window, 360)
+  cold_storage_after  = try(var.backup_config.cold_storage_after, 0)
+  delete_after        = try(var.backup_config.delete_after, 35)
+  resource_arns = compact(concat([
+    module.database.cluster_arn,
+  ], try(var.backup_config.additional_resource_arns, [])))
+  tags = local.default_tags
+}
+
+module "cost_monitoring" {
+  source = "./modules/cost_monitoring"
+
+  enabled             = try(var.cost_monitoring.enabled, false)
+  budget_limit        = try(var.cost_monitoring.budget_limit, null)
+  budget_type         = try(var.cost_monitoring.budget_type, "COST")
+  time_unit           = try(var.cost_monitoring.time_unit, "MONTHLY")
+  limit_unit          = try(var.cost_monitoring.limit_unit, "USD")
+  threshold_percent   = try(var.cost_monitoring.threshold_percent, 80)
+  notification_emails = try(var.cost_monitoring.notification_emails, [])
+  tags                = local.default_tags
+}
+
 resource "kubernetes_namespace" "monitoring" {
   metadata {
     name = "monitoring"

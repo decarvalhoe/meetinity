@@ -92,6 +92,13 @@ The project uses a modern **microservices architecture**:
 - **Database**: PostgreSQL for data persistence
 - **Cache**: Redis for performance optimization
 
+### Cloud Infrastructure Enhancements
+
+- **Static assets CDN**: Private S3 bucket fronted by CloudFront with optional custom domains.
+- **Shared load balancers**: Pre-provisioned ALB (HTTP/HTTPS) and NLB (TCP) endpoints for workloads that cannot rely on the ingress controller.
+- **Automated backups**: Daily AWS Backup plan covering the Aurora PostgreSQL cluster with configurable retention.
+- **Cost monitoring**: Monthly AWS Budget notifications to alert the platform team and finance stakeholders.
+
 ### Repository Structure
 
 | Repository | Description | Status |

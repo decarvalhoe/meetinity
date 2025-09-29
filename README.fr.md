@@ -92,6 +92,13 @@ Le projet utilise une **architecture microservices** moderne :
 - **Base de Données** : PostgreSQL pour la persistance des données
 - **Cache** : Redis pour l'optimisation des performances
 
+### Renforcements d'Infrastructure Cloud
+
+- **CDN pour assets statiques** : Bucket S3 privé exposé via CloudFront avec prise en charge des domaines personnalisés.
+- **Load balancers partagés** : ALB (HTTP/HTTPS) et NLB (TCP) pré-provisionnés pour les charges ne passant pas par l'ingress Kubernetes.
+- **Sauvegardes automatisées** : Plan AWS Backup quotidien couvrant le cluster Aurora PostgreSQL avec rétention ajustable.
+- **Suivi des coûts** : Budget AWS mensuel envoyant des alertes aux équipes plateforme et finance.
+
 ### Structure des Repositories
 
 | Repository | Description | État |

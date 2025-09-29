@@ -33,3 +33,13 @@ output "security_group_id" {
   description = "Security group protecting the database cluster."
   value       = aws_security_group.this.id
 }
+
+output "cluster_arn" {
+  description = "ARN of the Aurora PostgreSQL cluster."
+  value       = aws_rds_cluster.this.arn
+}
+
+output "cluster_id" {
+  description = "Identifier of the Aurora PostgreSQL cluster."
+  value       = aws_rds_cluster.this.id
+}
