@@ -9,6 +9,7 @@ from .database import Base, get_engine, init_engine
 from .dependencies import cleanup_services
 from .http import error_response
 from .routes.conversations import conversations_bp
+from .websocket import init_socketio, socketio
 
 
 def create_app(config: dict[str, object] | None = None) -> Flask:
@@ -29,6 +30,7 @@ def create_app(config: dict[str, object] | None = None) -> Flask:
     app.register_blueprint(conversations_bp)
     app.teardown_appcontext(cleanup_services)
     register_error_handlers(app)
+    init_socketio(app)
 
     @app.get("/health")
     def health():
@@ -52,3 +54,6 @@ def register_error_handlers(app: Flask) -> None:
 
 
 app = create_app()
+
+
+__all__ = ["app", "socketio", "create_app"]

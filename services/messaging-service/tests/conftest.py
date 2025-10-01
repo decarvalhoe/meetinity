@@ -11,6 +11,7 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from src.database import Base, dispose_engine, get_engine
 from src.main import create_app
+from src.websocket import socketio
 
 
 @pytest.fixture
@@ -26,6 +27,13 @@ def app():
 @pytest.fixture
 def client(app):
     return app.test_client()
+
+
+@pytest.fixture
+def socketio_client(app, client):
+    sio_client = socketio.test_client(app, flask_test_client=client)
+    yield sio_client
+    sio_client.disconnect()
 
 
 def auth_header(user_id: int) -> dict[str, str]:
