@@ -13,16 +13,23 @@ from ..errors import (
     ConversationNotFoundError,
     ValidationError,
 )
-from ..integrations import ModerationClient, ModerationResponse
+from ..integrations import ModerationClient, ModerationResponse, NotificationClient
 from ..models import Conversation, ConversationParticipant, Message
+from ..websocket import broadcast_message_created
 
 
 class ConversationService:
     """High level conversation operations backed by SQLAlchemy."""
 
-    def __init__(self, session: Session, moderation_client: ModerationClient | None = None):
+    def __init__(
+        self,
+        session: Session,
+        moderation_client: ModerationClient | None = None,
+        notification_client: NotificationClient | None = None,
+    ):
         self.session = session
         self.moderation_client = moderation_client
+        self.notification_client = notification_client
 
     # ------------------------------------------------------------------
     # Conversation queries
@@ -74,6 +81,8 @@ class ConversationService:
         self.session.add_all([creator_participant, other_participant])
 
         message_obj: Message | None = None
+        message_payload: dict[str, object] | None = None
+        recipient_id: int | None = None
         if initial_message is not None:
             text = initial_message.strip()
             if not text:
@@ -98,9 +107,20 @@ class ConversationService:
             self.session.add(message_obj)
             creator_participant.last_read_at = message_obj.created_at
             conversation.updated_at = message_obj.created_at
+            self.session.flush()
+            message_payload = self._serialize_message(message_obj)
+            recipient = self._other_participant(conversation, user_id)
+            recipient_id = recipient.user_id if recipient else None
 
         self.session.flush()
         self.session.commit()
+        if message_payload and recipient_id is not None:
+            self._dispatch_realtime_and_notifications(
+                conversation_id=conversation.id,
+                sender_id=user_id,
+                recipient_id=recipient_id,
+                message_payload=message_payload,
+            )
         return self._serialize_conversation(conversation, user_id, last_message_override=message_obj)
 
     def get_messages(self, conversation_id: int, user_id: int) -> list[dict[str, object]]:
@@ -113,17 +133,31 @@ class ConversationService:
         messages = self.session.scalars(query).all()
         return [self._serialize_message(msg) for msg in messages]
 
-    def send_message(self, conversation_id: int, user_id: int, text: str) -> dict[str, object]:
+    def send_message(
+        self,
+        conversation_id: int,
+        user_id: int,
+        text: str | None,
+        attachment: dict[str, object] | None = None,
+    ) -> dict[str, object]:
         conversation, participant = self._ensure_participant(conversation_id, user_id)
-        cleaned = text.strip()
-        if not cleaned:
-            raise ValidationError("Validation échouée.", {"text": ["Le message ne peut pas être vide."]})
-        if len(cleaned) > 1000:
+        cleaned = text.strip() if isinstance(text, str) else None
+        if not cleaned and not attachment:
+            raise ValidationError(
+                "Validation échouée.",
+                {"text": ["Le message doit contenir du texte ou une pièce jointe."]},
+            )
+        if cleaned and len(cleaned) > 1000:
             raise ValidationError(
                 "Validation échouée.", {"text": ["Le message ne peut pas dépasser 1000 caractères."]}
             )
 
-        moderation = self._evaluate_moderation(cleaned, conversation.id, user_id, field="text")
+        if attachment is not None:
+            self._validate_attachment(attachment)
+
+        moderation = None
+        if cleaned:
+            moderation = self._evaluate_moderation(cleaned, conversation.id, user_id, field="text")
         message = Message(
             conversation_id=conversation.id,
             sender_id=user_id,
@@ -131,19 +165,59 @@ class ConversationService:
             created_at=_utcnow(),
             moderation_status=moderation.status if moderation else "approved",
             moderation_labels=moderation.labels if moderation else None,
+            attachment_url=attachment.get("url") if attachment else None,
+            attachment_size=attachment.get("size") if attachment else None,
+            attachment_encryption_key=attachment.get("encryption_key") if attachment else None,
         )
         self.session.add(message)
         participant.last_read_at = message.created_at
         conversation.updated_at = message.created_at
         self.session.flush()
+        message_payload = self._serialize_message(message)
+        recipient = self._other_participant(conversation, user_id)
+        recipient_id = recipient.user_id if recipient else None
         self.session.commit()
-        return self._serialize_message(message)
+        if recipient_id is not None:
+            self._dispatch_realtime_and_notifications(
+                conversation_id=conversation.id,
+                sender_id=user_id,
+                recipient_id=recipient_id,
+                message_payload=message_payload,
+            )
+        return message_payload
+
+    def get_attachment_metadata(
+        self, conversation_id: int, user_id: int, message_id: int
+    ) -> dict[str, object]:
+        conversation, _ = self._ensure_participant(conversation_id, user_id)
+        query = (
+            select(Message)
+            .where(
+                Message.id == message_id,
+                Message.conversation_id == conversation.id,
+            )
+            .limit(1)
+        )
+        message = self.session.execute(query).scalar_one_or_none()
+        if message is None or not message.attachment_url:
+            raise ConversationNotFoundError("Pièce jointe introuvable pour ce message.")
+
+        return {
+            "message_id": message.id,
+            "conversation_id": conversation.id,
+            "url": message.attachment_url,
+            "size": message.attachment_size,
+            "encryption_key": message.attachment_encryption_key,
+        }
 
     def mark_read(self, conversation_id: int, user_id: int) -> None:
         _, participant = self._ensure_participant(conversation_id, user_id)
         participant.last_read_at = _utcnow()
         self.session.flush()
         self.session.commit()
+
+    def ensure_participant(self, conversation_id: int, user_id: int) -> None:
+        self._ensure_participant(conversation_id, user_id)
 
     # ------------------------------------------------------------------
     # Internal helpers
@@ -207,13 +281,14 @@ class ConversationService:
             payload["last_message"] = {
                 "text": last_message.text,
                 "timestamp": last_message.created_at.isoformat().replace("+00:00", "Z"),
+                "attachment": self._serialize_attachment(last_message),
             }
         else:
             payload["last_message"] = None
         return payload
 
     def _serialize_message(self, message: Message) -> dict[str, object]:
-        return {
+        payload = {
             "id": message.id,
             "conversation_id": message.conversation_id,
             "sender_id": message.sender_id,
@@ -221,6 +296,17 @@ class ConversationService:
             "timestamp": message.created_at.isoformat().replace("+00:00", "Z"),
             "moderation_status": message.moderation_status,
             "moderation_labels": message.moderation_labels or {},
+        }
+        payload["attachment"] = self._serialize_attachment(message)
+        return payload
+
+    def _serialize_attachment(self, message: Message) -> dict[str, object] | None:
+        if not message.attachment_url:
+            return None
+        return {
+            "url": message.attachment_url,
+            "size": message.attachment_size,
+            "encryption_key": message.attachment_encryption_key,
         }
 
     def _evaluate_moderation(
@@ -246,6 +332,62 @@ class ConversationService:
                 {field: ["Le message a été bloqué par la modération automatique."]},
             )
         return response
+
+    def _validate_attachment(self, attachment: dict[str, object]) -> None:
+        url = attachment.get("url")
+        if not isinstance(url, str) or not url:
+            raise ValidationError(
+                "Validation échouée.",
+                {"attachment": ["L'URL de la pièce jointe est invalide."]},
+            )
+        size = attachment.get("size")
+        if not isinstance(size, int) or size <= 0:
+            raise ValidationError(
+                "Validation échouée.",
+                {"attachment": ["La taille de la pièce jointe est invalide."]},
+            )
+        key = attachment.get("encryption_key")
+        if not isinstance(key, str) or not key:
+            raise ValidationError(
+                "Validation échouée.",
+                {"attachment": ["La clé de chiffrement est requise pour la pièce jointe."]},
+            )
+
+    def _other_participant(
+        self, conversation: Conversation, sender_id: int
+    ) -> ConversationParticipant | None:
+        return next(
+            (participant for participant in conversation.participants if participant.user_id != sender_id),
+            None,
+        )
+
+    def _dispatch_realtime_and_notifications(
+        self,
+        *,
+        conversation_id: int,
+        sender_id: int,
+        recipient_id: int,
+        message_payload: dict[str, object],
+    ) -> None:
+        try:
+            broadcast_message_created(message_payload)
+        except Exception as exc:  # pragma: no cover - defensive logging
+            current_app.logger.warning("WebSocket broadcast failed", exc_info=exc)
+
+        if not self.notification_client or not self.notification_client.is_enabled():
+            return
+
+        try:
+            self.notification_client.publish_new_message(
+                conversation_id=conversation_id,
+                message_id=message_payload["id"],
+                sender_id=sender_id,
+                recipient_id=recipient_id,
+                preview_text=message_payload.get("text"),
+                attachment=message_payload.get("attachment"),
+            )
+        except Exception as exc:  # pragma: no cover - network issues
+            current_app.logger.warning("Notification publish failed", exc_info=exc)
 
 
 def _utcnow() -> datetime:

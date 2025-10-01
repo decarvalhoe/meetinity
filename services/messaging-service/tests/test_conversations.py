@@ -4,7 +4,7 @@ from typing import Any
 
 from flask import Response
 
-from src.integrations import ModerationClient, ModerationResponse
+from src.integrations import ModerationClient, ModerationResponse, NotificationClient
 
 
 def auth_header(user_id: int) -> dict[str, str]:
@@ -30,6 +30,7 @@ def test_create_conversation_with_initial_message(client):
     data = response.get_json()
     assert data["id"] == 1
     assert data["last_message"]["text"] == "Bonjour"
+    assert data["last_message"]["attachment"] is None
     assert data["unread_count"] == 0
 
     # Should appear in conversation list
@@ -56,12 +57,14 @@ def test_post_message_and_fetch_thread(client):
     assert message["sender_id"] == 2
     assert message["moderation_status"] == "approved"
     assert message["moderation_labels"] == {}
+    assert message["attachment"] is None
 
     list_response = _get_json(client, f"/conversations/{conversation_id}/messages", user_id=1)
     assert list_response.status_code == 200
     messages = list_response.get_json()["messages"]
     assert len(messages) == 1
     assert messages[0]["text"] == "Salut"
+    assert messages[0]["attachment"] is None
 
 
 def test_mark_read_resets_unread_count(client):
@@ -111,3 +114,82 @@ def test_moderation_blocks_message(monkeypatch, app):
     assert response.status_code == 400
     body = response.get_json()
     assert "Le message a été bloqué" in body["details"]["initial_message"][0]
+
+
+def test_send_message_with_attachment_flow(client):
+    create_response = _post_json(client, "/conversations", {"participant_id": 2}, user_id=1)
+    conversation_id = create_response.get_json()["id"]
+
+    upload_response = _post_json(
+        client,
+        f"/conversations/{conversation_id}/attachments",
+        {"file_name": "photo.png", "size": 2048, "encryption_key": "secret-key"},
+        user_id=1,
+    )
+    assert upload_response.status_code == 201
+    upload_data = upload_response.get_json()
+
+    attachment_payload = {
+        "url": upload_data["file_url"],
+        "size": upload_data["size"],
+        "encryption_key": upload_data["encryption_key"],
+    }
+
+    send_response = _post_json(
+        client,
+        f"/conversations/{conversation_id}/messages",
+        {"text": "Voici le fichier", "attachment": attachment_payload},
+        user_id=2,
+    )
+    assert send_response.status_code == 201
+    message = send_response.get_json()
+    assert message["attachment"]["url"] == attachment_payload["url"]
+    assert message["attachment"]["size"] == 2048
+
+    download_response = client.get(
+        f"/conversations/{conversation_id}/attachments/{message['id']}",
+        headers=auth_header(1),
+    )
+    assert download_response.status_code == 200
+    metadata = download_response.get_json()
+    assert metadata["url"] == attachment_payload["url"]
+    assert metadata["encryption_key"] == "secret-key"
+
+
+def test_websocket_event_and_notification_published(
+    client, socketio_client, monkeypatch, app
+):
+    app.config["NOTIFICATION_SERVICE_URL"] = "http://notification.local"
+
+    monkeypatch.setattr(NotificationClient, "is_enabled", lambda self: True)
+    published: dict[str, Any] = {}
+
+    def fake_publish(self, **payload):
+        published.update(payload)
+
+    monkeypatch.setattr(NotificationClient, "publish_new_message", fake_publish)
+
+    create_response = _post_json(client, "/conversations", {"participant_id": 2}, user_id=1)
+    conversation_id = create_response.get_json()["id"]
+
+    socketio_client.emit("join_conversation", {"conversation_id": conversation_id})
+    socketio_client.get_received()  # drain join ack
+
+    send_response = _post_json(
+        client,
+        f"/conversations/{conversation_id}/messages",
+        {"text": "Salut temps réel"},
+        user_id=2,
+    )
+    assert send_response.status_code == 201
+
+    events = socketio_client.get_received()
+    assert any(event["name"] == "message.created" for event in events)
+    created_events = [event for event in events if event["name"] == "message.created"]
+    assert created_events
+    payload = created_events[-1]["args"][0]
+    assert payload["text"] == "Salut temps réel"
+
+    assert published["conversation_id"] == conversation_id
+    assert published["sender_id"] == 2
+    assert published["recipient_id"] == 1

@@ -49,4 +49,4 @@ ENV PYTHONPATH=/app \
     FLASK_APP=src.main:create_app \
     APP_PORT=8080
 
-CMD ["python", "-m", "gunicorn", "--bind", "0.0.0.0:8080", "--workers", "4", "--timeout", "120", "src.main:create_app()"]
+CMD ["python", "-m", "gunicorn", "--worker-class", "eventlet", "--workers", "1", "--bind", "0.0.0.0:8080", "src.main:app"]

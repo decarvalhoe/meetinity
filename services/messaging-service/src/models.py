@@ -3,7 +3,16 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import Column, DateTime, ForeignKey, Integer, JSON, String, UniqueConstraint, func
+from sqlalchemy import (
+    Column,
+    DateTime,
+    ForeignKey,
+    Integer,
+    JSON,
+    String,
+    UniqueConstraint,
+    func,
+)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .database import Base
@@ -59,11 +68,14 @@ class Message(Base):
         ForeignKey("conversations.id", ondelete="CASCADE"), nullable=False, index=True
     )
     sender_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
-    text: Mapped[str] = mapped_column(String(1000), nullable=False)
+    text: Mapped[str | None] = mapped_column(String(1000))
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
     moderation_status: Mapped[str] = mapped_column(String(20), nullable=False, default="approved")
     moderation_labels: Mapped[dict | None] = mapped_column(JSON)
+    attachment_url: Mapped[str | None] = mapped_column(String(1024))
+    attachment_size: Mapped[int | None] = mapped_column(Integer)
+    attachment_encryption_key: Mapped[str | None] = mapped_column(String(512))
 
     conversation: Mapped[Conversation] = relationship("Conversation", back_populates="messages")
